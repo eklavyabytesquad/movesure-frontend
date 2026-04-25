@@ -1,0 +1,289 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+
+const inputCls =
+  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
+const selectCls =
+  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white';
+
+interface Branch {
+  branch_id: string;
+  name: string;
+  branch_code: string;
+  branch_type: string;
+  address: string | null;
+}
+
+interface FormState {
+  full_name: string;
+  email: string;
+  password: string;
+  post_in_office: string;
+  branch_id: string;
+  image_url: string;
+}
+
+export default function AddStaff() {
+  const router = useRouter();
+  const [form, setForm] = useState<FormState>({
+    full_name: '',
+    email: '',
+    password: '',
+    post_in_office: '',
+    branch_id: '',
+    image_url: '',
+  });
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user) {
+      router.replace('/auth/login');
+      return;
+    }
+    const token = getToken();
+    if (!token) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    fetch(`${API_BASE}/v1/staff/branches`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          router.replace('/auth/login');
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!data) return;
+        const list: Branch[] = data.branches ?? [];
+        setBranches(list);
+        const match = list.find((b) => b.branch_id === user.branch_id);
+        setForm((prev) => ({
+          ...prev,
+          branch_id: match ? match.branch_id : (list[0]?.branch_id ?? ''),
+        }));
+      })
+      .catch(() => setError('Failed to load branches.'))
+      .finally(() => setBranchesLoading(false));
+  }, [router]);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    const token = getToken();
+    if (!token) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    const payload: Record<string, string> = {
+      full_name: form.full_name,
+      email: form.email,
+      password: form.password,
+      post_in_office: form.post_in_office,
+      branch_id: form.branch_id,
+    };
+    if (form.image_url.trim()) payload.image_url = form.image_url.trim();
+
+    try {
+      const res = await fetch(`${API_BASE}/v1/staff`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 201) {
+        setSuccess(`Staff member "${data.staff.full_name}" added successfully.`);
+        setForm((prev) => ({
+          full_name: '',
+          email: '',
+          password: '',
+          post_in_office: '',
+          branch_id: prev.branch_id,
+          image_url: '',
+        }));
+      } else if (res.status === 401) {
+        router.replace('/auth/login');
+      } else if (res.status === 409) {
+        setError(typeof data.detail === 'string' ? data.detail : 'Email already registered.');
+      } else if (res.status === 404) {
+        setError(typeof data.detail === 'string' ? data.detail : 'Branch not found.');
+      } else if (res.status === 422) {
+        const msgs = Array.isArray(data.detail)
+          ? data.detail.map((d: { msg: string }) => d.msg).join('. ')
+          : 'Validation error. Please check all fields.';
+        setError(msgs);
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    } catch {
+      setError('Unable to reach the server. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const selectedBranch = branches.find((b) => b.branch_id === form.branch_id);
+
+  return (
+    <div className="max-w-xl">
+      <h1 className="text-xl font-bold text-gray-900 mb-1">Add Staff Member</h1>
+      <p className="text-sm text-gray-500 mb-6">
+        Create a new user account and assign them to a branch.
+      </p>
+
+      {error && (
+        <div className="mb-5 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+          <span className="mt-0.5">&#9888;</span>
+          <span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="mb-5 flex items-start gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl">
+          <span className="mt-0.5">&#10003;</span>
+          <span>{success}</span>
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Full Name *</label>
+            <input
+              name="full_name"
+              type="text"
+              value={form.full_name}
+              onChange={handleChange}
+              required
+              minLength={2}
+              placeholder="Ravi Kumar"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Email *</label>
+            <input
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
+              required
+              placeholder="ravi@company.io"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Password *</label>
+            <input
+              name="password"
+              type="password"
+              value={form.password}
+              onChange={handleChange}
+              required
+              minLength={8}
+              placeholder="Min 8 characters"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Role / Post *</label>
+            <input
+              name="post_in_office"
+              type="text"
+              value={form.post_in_office}
+              onChange={handleChange}
+              required
+              placeholder="driver, manager, accountant"
+              className={inputCls}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Branch *</label>
+            {branchesLoading ? (
+              <div className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-400 bg-gray-50">
+                Loading branches...
+              </div>
+            ) : (
+              <select
+                name="branch_id"
+                value={form.branch_id}
+                onChange={handleChange}
+                required
+                className={selectCls}
+              >
+                <option value="" disabled>Select a branch</option>
+                {branches.map((b) => (
+                  <option key={b.branch_id} value={b.branch_id}>
+                    {b.name} ({b.branch_code})
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedBranch && (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                <span className="px-2 py-0.5 bg-gray-100 rounded-full capitalize">
+                  {selectedBranch.branch_type}
+                </span>
+                {selectedBranch.address && (
+                  <span className="px-2 py-0.5 bg-gray-100 rounded-full">
+                    {selectedBranch.address}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+              Profile Image URL{' '}
+              <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <input
+              name="image_url"
+              type="url"
+              value={form.image_url}
+              onChange={handleChange}
+              placeholder="https://cdn.example.com/avatar.jpg"
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || branchesLoading}
+          className="w-full py-3 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 active:scale-[0.98] disabled:opacity-60 transition-all"
+        >
+          {loading ? 'Adding Staff...' : 'Add Staff Member'}
+        </button>
+      </form>
+    </div>
+  );
+}
