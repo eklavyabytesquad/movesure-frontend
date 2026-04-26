@@ -3,11 +3,8 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, getToken, getUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-
-const inputCls =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
-const selectCls =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white';
+import { FormInput, SearchableDropdown, SubmitButton } from './ui';
+import type { DropdownOption } from './ui';
 
 interface Branch {
   branch_id: string;
@@ -147,6 +144,10 @@ export default function AddStaff() {
   }
 
   const selectedBranch = branches.find((b) => b.branch_id === form.branch_id);
+  const branchOptions: DropdownOption[] = branches.map((b) => ({
+    value: b.branch_id,
+    label: `${b.name} (${b.branch_code})`,
+  }));
 
   return (
     <div className="max-w-xl">
@@ -173,78 +174,59 @@ export default function AddStaff() {
         className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Full Name *</label>
-            <input
-              name="full_name"
-              type="text"
-              value={form.full_name}
-              onChange={handleChange}
-              required
-              minLength={2}
-              placeholder="Ravi Kumar"
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Email *</label>
-            <input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              placeholder="ravi@company.io"
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Password *</label>
-            <input
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              minLength={8}
-              placeholder="Min 8 characters"
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Role / Post *</label>
-            <input
-              name="post_in_office"
-              type="text"
-              value={form.post_in_office}
-              onChange={handleChange}
-              required
-              placeholder="driver, manager, accountant"
-              className={inputCls}
-            />
-          </div>
+          <FormInput
+            label="Full Name *"
+            name="full_name"
+            type="text"
+            value={form.full_name}
+            onChange={handleChange}
+            required
+            minLength={2}
+            placeholder="Ravi Kumar"
+          />
+          <FormInput
+            label="Email *"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+            placeholder="ravi@company.io"
+          />
+          <FormInput
+            label="Password *"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+            minLength={8}
+            placeholder="Min 8 characters"
+          />
+          <FormInput
+            label="Role / Post *"
+            name="post_in_office"
+            type="text"
+            value={form.post_in_office}
+            onChange={handleChange}
+            required
+            placeholder="driver, manager, accountant"
+          />
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Branch *</label>
             {branchesLoading ? (
               <div className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-400 bg-gray-50">
                 Loading branches...
               </div>
             ) : (
-              <select
-                name="branch_id"
+              <SearchableDropdown
+                label="Branch *"
                 value={form.branch_id}
-                onChange={handleChange}
+                onChange={(val) => setForm((f) => ({ ...f, branch_id: val }))}
+                options={branchOptions}
+                placeholder="Select a branch"
                 required
-                className={selectCls}
-              >
-                <option value="" disabled>Select a branch</option>
-                {branches.map((b) => (
-                  <option key={b.branch_id} value={b.branch_id}>
-                    {b.name} ({b.branch_code})
-                  </option>
-                ))}
-              </select>
+              />
             )}
             {selectedBranch && (
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
@@ -261,28 +243,20 @@ export default function AddStaff() {
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-              Profile Image URL{' '}
-              <span className="font-normal text-gray-400">(optional)</span>
-            </label>
-            <input
+            <FormInput
+              label="Profile Image URL (optional)"
               name="image_url"
               type="url"
               value={form.image_url}
               onChange={handleChange}
               placeholder="https://cdn.example.com/avatar.jpg"
-              className={inputCls}
             />
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading || branchesLoading}
-          className="w-full py-3 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 active:scale-[0.98] disabled:opacity-60 transition-all"
-        >
-          {loading ? 'Adding Staff...' : 'Add Staff Member'}
-        </button>
+        <SubmitButton loading={loading} disabled={branchesLoading} loadingText="Adding Staff..." fullWidth>
+          Add Staff Member
+        </SubmitButton>
       </form>
     </div>
   );

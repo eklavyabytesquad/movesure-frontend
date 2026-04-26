@@ -2,54 +2,134 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { uiConfig } from '@/lib/ui-config';
+import { usePermissions } from '@/hooks/usePermissions';
+import { SLUGS } from '@/lib/permissions';
+
+const icons = {
+  staff: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  deactivate: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+    </svg>
+  ),
+  states: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+    </svg>
+  ),
+  cities: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  transports: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h10l2-3h1a1 1 0 001-1v-3l-3-3h-3z" />
+    </svg>
+  ),
+  cityTransports: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+    </svg>
+  ),
+  permissions: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  ),
+  branches: (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 22V12h6v10" />
+    </svg>
+  ),
+};
 
 const settingsNav = [
   {
-    label: 'Staff Management',
+    label: 'Staff',
     items: [
-      { href: '/dashboard/settings/add-staff',        label: 'Add Staff',        icon: '➕' },
-      { href: '/dashboard/settings/list-staff',       label: 'View All Staff',   icon: '👥' },
-      { href: '/dashboard/settings/update-staff',     label: 'Update Staff',     icon: '✏️' },
-      { href: '/dashboard/settings/deactivate-staff', label: 'Deactivate Staff', icon: '🚫' },
+      { href: '/dashboard/settings/staff',            label: 'Staff Members',    icon: icons.staff,          requiredSlug: SLUGS.STAFF_READ   },
+      { href: '/dashboard/settings/deactivate-staff', label: 'Deactivate Staff', icon: icons.deactivate,     requiredSlug: SLUGS.STAFF_DELETE },
+    ],
+  },
+  {
+    label: 'Master Data',
+    items: [
+      { href: '/dashboard/settings/branches',         label: 'Branches',         icon: icons.branches,       requiredSlug: SLUGS.MASTER_READ  },
+      { href: '/dashboard/settings/states',           label: 'States',           icon: icons.states,         requiredSlug: SLUGS.MASTER_READ  },
+      { href: '/dashboard/settings/cities',           label: 'Cities',           icon: icons.cities,         requiredSlug: SLUGS.MASTER_READ  },
+      { href: '/dashboard/settings/transports',       label: 'Transports',       icon: icons.transports,     requiredSlug: SLUGS.MASTER_READ  },
+      { href: '/dashboard/settings/city-transports',  label: 'City Transports',  icon: icons.cityTransports, requiredSlug: SLUGS.MASTER_READ  },
+    ],
+  },
+  {
+    label: 'Access Control',
+    items: [
+      { href: '/dashboard/settings/permissions', label: 'IAM Permissions', icon: icons.permissions, requiredSlug: SLUGS.IAM_MANAGE },
     ],
   },
 ];
 
 export default function SettingsSideNavbar() {
   const pathname = usePathname();
+  const { can, loading: permsLoading } = usePermissions();
+
+  // While loading, show all items (no flicker). Once loaded, filter by permission.
+  const canSee = (slug: string) => permsLoading || can(slug);
+
+  const visibleNav = settingsNav
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canSee(item.requiredSlug)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
-    <aside className="w-56 shrink-0 bg-white border-r border-gray-200 min-h-full py-6 px-3">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 mb-3">
-        Settings
-      </p>
-      {settingsNav.map((group) => (
-        <div key={group.label} className="mb-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-1">
-            {group.label}
-          </p>
-          <ul className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      active
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <span>{item.icon}</span>
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+    <aside className={`${uiConfig.layout.sidebarWidth} shrink-0 ${uiConfig.colors.sidebarBg} ${uiConfig.colors.sidebarBorder} min-h-full py-6 flex flex-col`}>
+      <div className="px-5 mb-5">
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
+          Settings
+        </p>
+      </div>
+
+      <nav className="flex-1 px-3 space-y-6">
+        {visibleNav.map((group) => (
+          <div key={group.label}>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-2 mb-1.5">
+              {group.label}
+            </p>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-2.5 px-2 py-2 ${uiConfig.radius.button} text-sm transition-all ${
+                        active
+                          ? uiConfig.active.sidebarLink
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className={active ? uiConfig.accent.icon : 'text-slate-400'}>
+                        {item.icon}
+                      </span>
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
     </aside>
   );
 }

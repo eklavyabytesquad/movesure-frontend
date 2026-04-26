@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, getToken, getUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { ActionButton } from './ui';
+import { usePermissions } from '@/hooks/usePermissions';
+import { SLUGS } from '@/lib/permissions';
 
 interface Branch {
   branch_id: string;
@@ -21,6 +24,8 @@ interface StaffMember {
 
 export default function DeactivateStaff() {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canToggle = can(SLUGS.STAFF_DELETE);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,6 +139,7 @@ export default function DeactivateStaff() {
                     branchName={branchName(s.branch_id)}
                     toggling={toggling === s.id}
                     onToggle={() => toggleStatus(s)}
+                    canToggle={canToggle}
                   />
                 ))}
               </ul>
@@ -156,6 +162,7 @@ export default function DeactivateStaff() {
                     branchName={branchName(s.branch_id)}
                     toggling={toggling === s.id}
                     onToggle={() => toggleStatus(s)}
+                    canToggle={canToggle}
                   />
                 ))}
               </ul>
@@ -172,11 +179,13 @@ function StaffRow({
   branchName,
   toggling,
   onToggle,
+  canToggle,
 }: {
   staff: StaffMember;
   branchName: string;
   toggling: boolean;
   onToggle: () => void;
+  canToggle: boolean;
 }) {
   return (
     <li className="flex items-center justify-between gap-4 bg-white px-5 py-3.5 rounded-xl border border-gray-200 shadow-sm">
@@ -186,18 +195,16 @@ function StaffRow({
           {staff.email} · <span className="capitalize">{staff.post_in_office}</span> · {branchName}
         </p>
       </div>
-      <button
-        type="button"
+      {canToggle && (
+      <ActionButton
+        variant={staff.is_active ? 'danger' : 'save'}
+        size="md"
         onClick={onToggle}
         disabled={toggling}
-        className={`shrink-0 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
-          staff.is_active
-            ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-            : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-        }`}
       >
         {toggling ? '...' : staff.is_active ? 'Deactivate' : 'Activate'}
-      </button>
+      </ActionButton>
+      )}
     </li>
   );
 }

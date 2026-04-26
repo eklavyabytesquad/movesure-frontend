@@ -3,11 +3,8 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, getToken, getUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-
-const inputCls =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
-const selectCls =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white';
+import { FormInput, SearchableDropdown, SubmitButton } from './ui';
+import type { DropdownOption } from './ui';
 
 interface Branch {
   branch_id: string;
@@ -152,6 +149,11 @@ export default function UpdateStaff() {
   const branchName = (id: string) =>
     branches.find((b) => b.branch_id === id)?.name ?? '';
 
+  const branchOptions: DropdownOption[] = branches.map((b) => ({
+    value: b.branch_id,
+    label: `${b.name} (${b.branch_code})`,
+  }));
+
   return (
     <div>
       <h1 className="text-xl font-bold text-gray-900 mb-1">Update Staff</h1>
@@ -227,85 +229,56 @@ export default function UpdateStaff() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">Full Name *</label>
-                    <input
-                      name="full_name"
-                      type="text"
-                      value={form.full_name}
-                      onChange={handleChange}
-                      required
-                      minLength={2}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">Role / Post *</label>
-                    <input
-                      name="post_in_office"
-                      type="text"
-                      value={form.post_in_office}
-                      onChange={handleChange}
-                      required
-                      placeholder="driver, manager, accountant"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">Branch *</label>
-                    <select
-                      name="branch_id"
-                      value={form.branch_id}
-                      onChange={handleChange}
-                      required
-                      className={selectCls}
-                    >
-                      <option value="" disabled>Select branch</option>
-                      {branches.map((b) => (
-                        <option key={b.branch_id} value={b.branch_id}>
-                          {b.name} ({b.branch_code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                      New Password{' '}
-                      <span className="font-normal text-gray-400">(leave blank to keep)</span>
-                    </label>
-                    <input
-                      name="password"
-                      type="password"
-                      value={form.password}
-                      onChange={handleChange}
-                      minLength={8}
-                      placeholder="Min 8 characters"
-                      className={inputCls}
-                    />
-                  </div>
+                  <FormInput
+                    label="Full Name *"
+                    name="full_name"
+                    type="text"
+                    value={form.full_name}
+                    onChange={handleChange}
+                    required
+                    minLength={2}
+                  />
+                  <FormInput
+                    label="Role / Post *"
+                    name="post_in_office"
+                    type="text"
+                    value={form.post_in_office}
+                    onChange={handleChange}
+                    required
+                    placeholder="driver, manager, accountant"
+                  />
+                  <SearchableDropdown
+                    label="Branch *"
+                    value={form.branch_id}
+                    onChange={(val) => setForm((f) => ({ ...f, branch_id: val }))}
+                    options={branchOptions}
+                    placeholder="Select branch"
+                    required
+                  />
+                  <FormInput
+                    label="New Password (leave blank to keep)"
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    minLength={8}
+                    placeholder="Min 8 characters"
+                  />
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                      Profile Image URL{' '}
-                      <span className="font-normal text-gray-400">(optional)</span>
-                    </label>
-                    <input
+                    <FormInput
+                      label="Profile Image URL (optional)"
                       name="image_url"
                       type="url"
                       value={form.image_url}
                       onChange={handleChange}
                       placeholder="https://cdn.example.com/avatar.jpg"
-                      className={inputCls}
                     />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full py-3 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 active:scale-[0.98] disabled:opacity-60 transition-all"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
+                <SubmitButton loading={saving} loadingText="Saving..." fullWidth>
+                  Save Changes
+                </SubmitButton>
               </form>
             </>
           )}

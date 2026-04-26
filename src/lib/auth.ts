@@ -29,4 +29,5 @@ export function getUser(): AuthUser | null {
 export function clearAuth(): void {
   sessionStorage.removeItem('ms_token');
   sessionStorage.removeItem('ms_user');
+  sessionStorage.removeItem('ms_perms');
 }

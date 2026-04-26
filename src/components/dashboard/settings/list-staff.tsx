@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE, getToken, getUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { SearchableDropdown } from './ui';
+import type { DropdownOption } from './ui';
 
 interface Branch {
   branch_id: string;
@@ -78,9 +80,9 @@ export default function ListStaff() {
     fetchStaff('');
   }, [router, fetchStaff]);
 
-  function handleBranchFilter(e: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedBranch(e.target.value);
-    fetchStaff(e.target.value);
+  function handleBranchFilter(branchId: string) {
+    setSelectedBranch(branchId);
+    fetchStaff(branchId);
   }
 
   const branchName = (id: string) =>
@@ -97,18 +99,14 @@ export default function ListStaff() {
       {/* Branch filter */}
       <div className="mb-5 flex items-center gap-3">
         <label className="text-sm font-medium text-gray-700 shrink-0">Filter by branch:</label>
-        <select
+        <SearchableDropdown
           value={selectedBranch}
           onChange={handleBranchFilter}
-          className="px-3 py-2 border border-gray-300 rounded-xl text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-w-50"
-        >
-          <option value="">All branches</option>
-          {branches.map((b) => (
-            <option key={b.branch_id} value={b.branch_id}>
-              {b.name} ({b.branch_code})
-            </option>
-          ))}
-        </select>
+          options={branches.map((b): DropdownOption => ({ value: b.branch_id, label: `${b.name} (${b.branch_code})` }))}
+          placeholder="All branches"
+          size="sm"
+          className="max-w-xs"
+        />
       </div>
 
       {error && (
