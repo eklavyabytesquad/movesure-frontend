@@ -86,7 +86,7 @@ export default function BiltyBooks() {
   const [citiesList, setCitiesList]         = useState<{ city_id: string; city_name: string }[]>([]);
   const [transportsList, setTransportsList] = useState<{ transport_id: string; transport_name: string }[]>([]);
 
-  async function fetchParties(token: string) {
+  async function fetchParties() {
     const [crs, ces, cityRes, tpRes] = await Promise.all([
       apiFetch(`/v1/bilty-setting/consignors`),
       apiFetch(`/v1/bilty-setting/consignees`),
@@ -116,7 +116,7 @@ export default function BiltyBooks() {
   useEffect(() => {
     if (!getUser()) { router.replace('/auth/login'); return; }
     fetchBooks();
-    if (token) fetchParties(token);
+    fetchParties();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchBooks, router]);
 
