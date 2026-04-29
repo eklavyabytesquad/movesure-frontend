@@ -1,323 +1,85 @@
-﻿'use client';
+'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getUser } from '@/lib/auth';
-import { apiFetch } from '@/lib/api';
-import { useRouter } from 'next/navigation';
-import { generateFirstA4 }  from './templates/first-a4-template';
-import { generateSecondA4 } from './templates/second-a4-template';
-import type { BiltyData }   from './templates/first-a4-template';
-import { useOfflineSync }    from '@/hooks/useOfflineSync';
+import { useState, useEffect, useRef } from 'react';
+import { apiFetch }           from '@/lib/api';
+import { generateFirstA4 }    from './templates/first-a4-template';
+import { generateSecondA4 }   from './templates/second-a4-template';
+import type { BiltyData }     from './templates/first-a4-template';
+import { useOfflineSync }     from '@/hooks/useOfflineSync';
+import { useBiltyMasterData } from '@/hooks/useBiltyMasterData';
+import { useBiltyRecent }     from '@/hooks/useBiltyRecent';
 import {
   queueOfflineBilty,
-  getPendingBilties,
-  pendingToSummary,
+  updatePendingBilty,
+  getPendingBiltyByLocalId,
+  pendingToBiltyData,
 } from '@/lib/offlineBiltyService';
 import {
-  saveMasterCache,
-  loadMasterCache,
-  CACHE_KEYS,
-} from '@/lib/masterDataCache';
+  cacheBiltyDetail,
+  loadCachedBiltyDetail,
+} from '@/lib/biltyCache';
+import { loadMasterCache, CACHE_KEYS } from '@/lib/masterDataCache';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 
 import {
   BLANK, BiltyForm,
-  Book, Consignor, Consignee, City, Transport, PrimaryTemplate, BiltyDiscount, BiltySummary,
+  Book, City, PrimaryTemplate,
 } from './types';
 import { PdfPreviewModal } from './ui';
-import SectionGrBook from './sections/SectionGrBook';
-import SectionConsignor from './sections/SectionConsignor';
-import SectionConsignee from './sections/SectionConsignee';
+import BiltySearchBar        from './ui/BiltySearchBar';
+import SectionGrBook         from './sections/SectionGrBook';
+import SectionConsignor      from './sections/SectionConsignor';
+import SectionConsignee      from './sections/SectionConsignee';
 import SectionRouteTransport from './sections/SectionRouteTransport';
-import SectionShipment from './sections/SectionShipment';
-import SectionInvoice from './sections/SectionInvoice';
-import SectionEwb from './sections/SectionEwb';
-import SectionCharges from './sections/SectionCharges';
-import SectionDiscount from './sections/SectionDiscount';
-import SectionRemark from './sections/SectionRemark';
-import SectionFormActions from './sections/SectionFormActions';
+import SectionShipment       from './sections/SectionShipment';
+import SectionInvoice        from './sections/SectionInvoice';
+import SectionEwb            from './sections/SectionEwb';
+import SectionCharges        from './sections/SectionCharges';
+import SectionDiscount       from './sections/SectionDiscount';
+import SectionRemark         from './sections/SectionRemark';
+import SectionFormActions    from './sections/SectionFormActions';
 
-const LIMIT = 40;
-
-// ─── Bilty Search Bar ────────────────────────────────────────────────────────
-function BiltySearchBar({
-  recent, loading, onSelect,
-}: {
-  recent: BiltySummary[];
-  loading: boolean;
-  onSelect: (id: string) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [open,  setOpen]  = useState(false);
-  const [hi,    setHi]    = useState(0);
-  const [shownCount, setShownCount] = useState(20);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const q = query.toLowerCase().trim();
-  const results = q.length === 0
-    ? recent.slice(0, shownCount)
-    : recent.filter(b =>
-        b.gr_no.toLowerCase().includes(q) ||
-        b.consignor_name.toLowerCase().includes(q) ||
-        b.consignee_name.toLowerCase().includes(q)
-      ).slice(0, 20);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (!open) { setOpen(true); setHi(0); return; }
-      setHi(h => Math.min(h + 1, results.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHi(h => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter') {
-      if (open && results[hi]) {
-        e.preventDefault();
-        onSelect(results[hi].bilty_id);
-        setOpen(false); setQuery('');
-      }
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-    }
-  }
-
-  return (
-    <div ref={ref} className="relative w-72 sm:w-80">
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
-          fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          value={query}
-          onChange={e => { setQuery(e.target.value); setOpen(true); setHi(0); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={loading ? 'Loading bilties…' : 'Search bilty in this book…'}
-          autoComplete="off"
-          suppressHydrationWarning
-          className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-        />
-      </div>
-
-      {open && results.length > 0 && (
-        <div className="absolute z-50 mt-1 right-0 w-88 bg-white border border-slate-200 rounded-xl shadow-xl max-h-96 overflow-y-auto">
-          <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-            {q ? 'Search results' : 'Recent bilties'} — click to edit
-          </p>
-          {results.map((b, i) => (
-            <button
-              key={b.bilty_id}
-              type="button"
-              onMouseDown={e => { e.preventDefault(); onSelect(b.bilty_id); setOpen(false); setQuery(''); }}
-              onMouseEnter={() => setHi(i)}
-              className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-slate-100 last:border-b-0 ${
-                i === hi ? 'bg-indigo-50' : 'hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="font-semibold font-mono text-slate-900 text-xs">{b.gr_no}</span>
-                <span className="text-[11px] text-slate-400">
-                  {b.bilty_date
-                    ? new Date(b.bilty_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
-                    : ''}
-                </span>
-              </div>
-              <div className="text-xs text-slate-600 truncate">{b.consignor_name} → {b.consignee_name}</div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs font-semibold text-slate-800">₹{b.total_amount?.toLocaleString('en-IN') ?? '—'}</span>
-                <span className="text-[10px] text-slate-400 uppercase">{b.payment_mode}</span>
-                <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${
-                  b.status === 'SAVED'         ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                  b.status === 'CANCELLED'     ? 'bg-red-50 text-red-600 border-red-200' :
-                  b.status === 'PENDING_SYNC'  ? 'bg-amber-50 text-amber-700 border-amber-300' :
-                  'bg-slate-100 text-slate-600 border-slate-200'
-                }`}>{b.status === 'PENDING_SYNC' ? '⏳ Pending Sync' : b.status}</span>
-              </div>
-            </button>
-          ))}
-          {/* Load more for recent (no query) */}
-          {!q && recent.length > shownCount && (
-            <button
-              type="button"
-              onMouseDown={e => { e.preventDefault(); setShownCount(n => n + 20); }}
-              className="w-full text-center px-3 py-2 text-xs text-indigo-600 font-medium hover:bg-indigo-50 border-t border-slate-100 transition-colors"
-            >
-              Load more ({recent.length - shownCount} remaining)
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function BiltyPage() {
-  const router = useRouter();
+  // ── Master data + dropdowns (cache-first, offline-safe) ──────────────────
+  const editBiltyIdRef = useRef<string | null>(null);
 
-  const [primaryBook,     setPrimaryBook]     = useState<Book | null>(null);
-  const [primaryTemplate, setPrimaryTemplate] = useState<PrimaryTemplate | null>(null);
-  const [noPrimaryBook,   setNoPrimaryBook]   = useState(false);
-  const [consignors,   setConsignors]   = useState<Consignor[]>([]);
-  const [consignees,   setConsignees]   = useState<Consignee[]>([]);
-  const [cities,       setCities]       = useState<City[]>([]);
-  const [transports,   setTransports]   = useState<Transport[]>([]);
-  const [discounts,    setDiscounts]    = useState<BiltyDiscount[]>([]);
-  const [cityTransportMap, setCityTransportMap] = useState<Record<string, string>>({});
-  const [dropLoading,  setDropLoading]  = useState(true);
+  const {
+    primaryBook, primaryTemplate, noPrimaryBook,
+    consignors, consignees, cities, transports, discounts, cityTransportMap,
+    dropLoading, refreshPrimaryBook,
+  } = useBiltyMasterData({ onBookLoaded: (book) => { if (!editBiltyIdRef.current) applyBookDefaults(book); } });
 
-  const [form,         setForm]         = useState<BiltyForm>({ ...BLANK, bilty_date: new Date().toISOString().split('T')[0] });
-  const [ewbNumbers,   setEwbNumbers]   = useState<string[]>(['']);
-  const [grPreview,    setGrPreview]    = useState('');
-  const [editBiltyId,  setEditBiltyId]  = useState<string | null>(null);
+  // ── Recent bilties (cache-first, offline-safe) ────────────────────────────
+  const { recent, recentLoading, recentPage, hasMorePages, loadRecent } = useBiltyRecent();
 
-  const [saving,       setSaving]       = useState(false);
-  const [saveError,    setSaveError]    = useState('');
-  const [savedJson,    setSavedJson]    = useState<object | null>(null);
-  const [printing,     setPrinting]     = useState(false);
-  const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
-
-  const [recent,        setRecent]        = useState<BiltySummary[]>([]);
-  const [recentLoading, setRecentLoading] = useState(false);
-  const [cancelId,      setCancelId]      = useState<string | null>(null);
-  const [cancelReason,  setCancelReason]  = useState('');
-  const [cancelling,    setCancelling]    = useState(false);
-  const [recentPage,    setRecentPage]    = useState(0);
-  const [hasMorePages,  setHasMorePages]  = useState(true);
-
-  // Offline sync
+  // ── Offline sync ──────────────────────────────────────────────────────────
   const { pendingCount, syncing, refreshPendingCount } = useOfflineSync({
     onSynced: () => loadRecent(0),
   });
 
-  // Shared helper: apply book_defaults to form (call AFTER cities/transports are loaded)
-  function applyBookDefaults(book: Book | null) {
-    if (!book) return;
-    const bd = book.book_defaults ?? {};
-    setForm(f => ({
-      ...f,
-      ...(bd.delivery_type ? { delivery_type:  bd.delivery_type as BiltyForm['delivery_type'] }  : {}),
-      ...(bd.payment_mode  ? { payment_mode:   bd.payment_mode  as BiltyForm['payment_mode']  }  : {}),
-      ...(bd.from_city_id  ? { from_city_id:   bd.from_city_id  }            : {}),
-      ...(bd.to_city_id    ? { to_city_id:     bd.to_city_id    }            : {}),
-      ...(bd.transport_id  ? { transport_id:   bd.transport_id  }            : {}),
-      ...(bd.bill_charge   ? { bill_charge:    String(bd.bill_charge)  }     : {}),
-      ...(bd.toll_charge   ? { toll_charge:    String(bd.toll_charge)  }     : {}),
-    }));
-  }
+  // ── Form state ────────────────────────────────────────────────────────────
+  const [form,       setForm]       = useState<BiltyForm>({ ...BLANK, bilty_date: new Date().toISOString().split('T')[0] });
+  const [ewbNumbers, setEwbNumbers] = useState<string[]>(['']);
+  const [grPreview,  setGrPreview]  = useState('');
+  const [editBiltyId, setEditBiltyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!getUser()) { router.replace('/auth/login'); return; }
-    async function load() {
-      setDropLoading(true);
-      try {
-        if (!navigator.onLine) {
-          // ── Offline path: restore master data from IndexedDB cache ──────────
-          const [bookData, tplData, crData, ceData, cityData, tpData, discData, ctData] =
-            await Promise.all([
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.PRIMARY_BOOK),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.PRIMARY_TPL),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CONSIGNORS),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CONSIGNEES),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CITIES),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.TRANSPORTS),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.DISCOUNTS),
-              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CITY_TRANSPORTS),
-            ]);
-          const cityList: City[]      = (cityData as { cities?: City[] } | null)?.cities ?? (cityData as City[] | null) ?? [];
-          const tpList:   Transport[] = (tpData   as { transports?: Transport[] } | null)?.transports ?? (tpData as Transport[] | null) ?? [];
-          setCities(cityList);
-          setTransports(tpList);
-          setConsignors((crData   as { consignors?: Consignor[] } | null)?.consignors ?? (crData   as Consignor[]   | null) ?? []);
-          setConsignees((ceData   as { consignees?: Consignee[] } | null)?.consignees ?? (ceData   as Consignee[]   | null) ?? []);
-          setDiscounts((discData  as { discounts?: BiltyDiscount[] } | null)?.discounts ?? (discData as BiltyDiscount[] | null) ?? []);
-          if (tplData) setPrimaryTemplate((tplData as { template?: PrimaryTemplate }).template ?? tplData as unknown as PrimaryTemplate);
-          const ctLinks: { city_id: string; transport_id: string }[] =
-            (ctData as { city_transports?: { city_id: string; transport_id: string }[] } | null)?.city_transports ?? [];
-          const ctMap: Record<string, string> = {};
-          ctLinks.forEach(l => { if (!ctMap[l.city_id]) ctMap[l.city_id] = l.transport_id; });
-          setCityTransportMap(ctMap);
-          if (bookData) {
-            const book: Book = (bookData as { book?: Book }).book ?? bookData as unknown as Book;
-            setPrimaryBook(book);
-            applyBookDefaults(book);
-          }
-          return;
-        }
+  // ── Action state ──────────────────────────────────────────────────────────
+  const [saving,    setSaving]    = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [savedJson, setSavedJson] = useState<object | null>(null);
+  const [printing,  setPrinting]  = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-        // ── Online path: fetch fresh data from API ───────────────────────────
-        const [primaryBookRes, primaryTplRes, crRes, ceRes, cityRes, tpRes, discRes, ctRes] = await Promise.all([
-          apiFetch(`/v1/bilty-setting/books/primary?bilty_type=REGULAR`),
-          apiFetch(`/v1/bilty-setting/templates/primary`),
-          apiFetch(`/v1/bilty-setting/consignors?is_active=true`),
-          apiFetch(`/v1/bilty-setting/consignees?is_active=true`),
-          apiFetch(`/v1/master/cities?is_active=true`),
-          apiFetch(`/v1/master/transports?is_active=true`),
-          apiFetch(`/v1/bilty-setting/discounts?is_active=true`),
-          apiFetch(`/v1/master/city-transports`),
-        ]);
+  // ── Cancel state ──────────────────────────────────────────────────────────
+  const [cancelId,     setCancelId]     = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling,   setCancelling]   = useState(false);
 
-        const jsons = await Promise.all([
-          (primaryBookRes.ok || primaryBookRes.status === 404) ? primaryBookRes.json().catch(() => null) : Promise.resolve(null),
-          primaryTplRes.ok  ? primaryTplRes.json().catch(() => null)  : Promise.resolve(null),
-          crRes.ok          ? crRes.json().catch(() => null)           : Promise.resolve(null),
-          ceRes.ok          ? ceRes.json().catch(() => null)           : Promise.resolve(null),
-          cityRes.ok        ? cityRes.json().catch(() => null)         : Promise.resolve(null),
-          tpRes.ok          ? tpRes.json().catch(() => null)           : Promise.resolve(null),
-          discRes.ok        ? discRes.json().catch(() => null)         : Promise.resolve(null),
-          ctRes.ok          ? ctRes.json().catch(() => null)           : Promise.resolve(null),
-        ]);
-        const [bookData, tplData, crData, ceData, cityData, tpData, discData, ctData] = jsons;
+  useEffect(() => { editBiltyIdRef.current = editBiltyId; }, [editBiltyId]);
 
-        const cityList: City[]      = cityData?.cities      ?? cityData      ?? [];
-        const tpList:   Transport[] = tpData?.transports    ?? tpData        ?? [];
-        setCities(cityList);
-        setTransports(tpList);
-        setConsignors(crData?.consignors ?? crData ?? []);
-        setConsignees(ceData?.consignees ?? ceData ?? []);
-        setDiscounts(discData?.discounts  ?? discData  ?? []);
-        if (tplData) setPrimaryTemplate(tplData?.template ?? tplData);
-
-        const ctLinks: { city_id: string; transport_id: string }[] =
-          ctData?.city_transports ?? ctData?.links ?? [];
-        const ctMap: Record<string, string> = {};
-        ctLinks.forEach(l => { if (!ctMap[l.city_id]) ctMap[l.city_id] = l.transport_id; });
-        setCityTransportMap(ctMap);
-
-        if (primaryBookRes.status === 404) {
-          setNoPrimaryBook(true);
-        } else if (bookData) {
-          const book: Book = bookData?.book ?? bookData;
-          setPrimaryBook(book);
-          applyBookDefaults(book);
-        }
-
-        // Persist to IndexedDB so the form works on next offline visit
-        await Promise.all([
-          bookData   ? saveMasterCache(CACHE_KEYS.PRIMARY_BOOK,    bookData)   : Promise.resolve(),
-          tplData    ? saveMasterCache(CACHE_KEYS.PRIMARY_TPL,     tplData)    : Promise.resolve(),
-          crData     ? saveMasterCache(CACHE_KEYS.CONSIGNORS,      crData)     : Promise.resolve(),
-          ceData     ? saveMasterCache(CACHE_KEYS.CONSIGNEES,      ceData)     : Promise.resolve(),
-          cityData   ? saveMasterCache(CACHE_KEYS.CITIES,          cityData)   : Promise.resolve(),
-          tpData     ? saveMasterCache(CACHE_KEYS.TRANSPORTS,      tpData)     : Promise.resolve(),
-          discData   ? saveMasterCache(CACHE_KEYS.DISCOUNTS,       discData)   : Promise.resolve(),
-          ctData     ? saveMasterCache(CACHE_KEYS.CITY_TRANSPORTS, ctData)     : Promise.resolve(),
-        ]);
-      } finally { setDropLoading(false); }
-    }
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // ── GR preview ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (form.bilty_type !== 'REGULAR' || !primaryBook) { setGrPreview(''); return; }
     setGrPreview(
@@ -327,6 +89,7 @@ export default function BiltyPage() {
     );
   }, [form.bilty_type, primaryBook]);
 
+  // ── Auto-total charges ────────────────────────────────────────────────────
   useEffect(() => {
     const sum = [
       form.freight_amount, form.labour_charge, form.bill_charge,
@@ -335,42 +98,49 @@ export default function BiltyPage() {
     if (sum > 0) setForm(f => ({ ...f, total_amount: sum.toFixed(2) }));
   }, [form.freight_amount, form.labour_charge, form.bill_charge, form.toll_charge, form.dd_charge, form.pf_charge, form.local_charge, form.other_charge]);
 
+  // ── Auto-freight from weight x rate ──────────────────────────────────────
   useEffect(() => {
     const w = parseFloat(form.weight) || 0;
-    const r = parseFloat(form.rate) || 0;
+    const r = parseFloat(form.rate)   || 0;
     if (w > 0 && r > 0) setForm(f => ({ ...f, freight_amount: (w * r).toFixed(2) }));
   }, [form.weight, form.rate]);
 
-  const loadRecent = useCallback(async (page = 0) => {
-    setRecentLoading(true);
-    try {
-      // Always prepend any offline-pending bilties on the first page
-      const pendingItems = page === 0
-        ? (await getPendingBilties().catch(() => [])).map(pendingToSummary)
-        : [];
-
-      if (!navigator.onLine) {
-        if (page === 0) setRecent(pendingItems);
-        return;
-      }
-
-      const res = await apiFetch(`/v1/bilty?limit=${LIMIT}&offset=${page * LIMIT}`);
-      if (res.ok) {
-        const d = await res.json();
-        const list: BiltySummary[] = d.bilties ?? d ?? [];
-        setRecent(prev => page === 0 ? [...pendingItems, ...list] : [...prev, ...list]);
-        setHasMorePages((d.count ?? list.length) >= LIMIT);
-        setRecentPage(page);
-      }
-    } finally { setRecentLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Load recent on mount so search bar is populated immediately
-  useEffect(() => { loadRecent(0); }, [loadRecent]);
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   function sf(key: keyof BiltyForm, val: string) {
     setForm(p => ({ ...p, [key]: val }));
+  }
+
+  function applyBookDefaults(book: Book | null) {
+    if (!book) return;
+    const bd = book.book_defaults ?? {};
+    setForm(f => ({
+      ...f,
+      ...(bd.delivery_type ? { delivery_type: bd.delivery_type as BiltyForm['delivery_type'] } : {}),
+      ...(bd.payment_mode  ? { payment_mode:  bd.payment_mode  as BiltyForm['payment_mode']  } : {}),
+      ...(bd.from_city_id  ? { from_city_id:  bd.from_city_id  } : {}),
+      ...(bd.to_city_id    ? { to_city_id:    bd.to_city_id    } : {}),
+      ...(bd.transport_id  ? { transport_id:  bd.transport_id  } : {}),
+      ...(bd.bill_charge   ? { bill_charge:   String(bd.bill_charge)  } : {}),
+      ...(bd.toll_charge   ? { toll_charge:   String(bd.toll_charge)  } : {}),
+    }));
+  }
+
+  function resetForm() {
+    const bd = primaryBook?.book_defaults ?? {};
+    setForm({
+      ...BLANK,
+      bilty_date: new Date().toISOString().split('T')[0],
+      ...(bd.delivery_type ? { delivery_type: bd.delivery_type as BiltyForm['delivery_type'] } : {}),
+      ...(bd.payment_mode  ? { payment_mode:  bd.payment_mode  as BiltyForm['payment_mode']  } : {}),
+      ...(bd.from_city_id  ? { from_city_id:  bd.from_city_id  } : {}),
+      ...(bd.to_city_id    ? { to_city_id:    bd.to_city_id    } : {}),
+      ...(bd.transport_id  ? { transport_id:  bd.transport_id  } : {}),
+      ...(bd.bill_charge   ? { bill_charge:   String(bd.bill_charge)  } : {}),
+      ...(bd.toll_charge   ? { toll_charge:   String(bd.toll_charge)  } : {}),
+    });
+    setEwbNumbers(['']);
+    setEditBiltyId(null); setSavedJson(null); setSaveError('');
   }
 
   function selectConsignor(id: string) {
@@ -393,28 +163,193 @@ export default function BiltyPage() {
     if (tpId) selectTransport(tpId);
   }
 
-  function resetForm() {
-    const base = { ...BLANK, bilty_date: new Date().toISOString().split('T')[0] };
-    const bd = primaryBook?.book_defaults ?? {};
-    setForm({
-      ...base,
-      ...(bd.delivery_type ? { delivery_type: bd.delivery_type as BiltyForm['delivery_type'] }  : {}),
-      ...(bd.payment_mode  ? { payment_mode:  bd.payment_mode  as BiltyForm['payment_mode']  }  : {}),
-      ...(bd.from_city_id  ? { from_city_id:  bd.from_city_id  }         : {}),
-      ...(bd.to_city_id    ? { to_city_id:    bd.to_city_id    }         : {}),
-      ...(bd.transport_id  ? { transport_id:  bd.transport_id  }         : {}),
-      ...(bd.bill_charge   ? { bill_charge:   String(bd.bill_charge) }   : {}),
-      ...(bd.toll_charge   ? { toll_charge:   String(bd.toll_charge) }   : {}),
-    });
-    setEwbNumbers(['']);
-    setEditBiltyId(null); setSavedJson(null); setSaveError('');
+  // ── Print (offline-safe) ──────────────────────────────────────────────────
+
+  async function printBilty(biltyId: string) {
+    setPrinting(true);
+    try {
+      let b: BiltyData | null = null;
+
+      if (biltyId.startsWith('offline:')) {
+        // Build BiltyData from IndexedDB pending record
+        const localId = parseInt(biltyId.split(':')[1], 10);
+        const pending = await getPendingBiltyByLocalId(localId);
+        if (!pending) { setSaveError('Bilty not found in offline queue.'); return; }
+        const cityMap: Record<string, string> = {};
+        cities.forEach((c: City) => { cityMap[c.city_id] = c.city_name; });
+        b = pendingToBiltyData(pending, cityMap);
+      } else if (navigator.onLine) {
+        // Fetch fresh and cache for future offline use
+        const res = await apiFetch(`/v1/bilty/${biltyId}`);
+        if (res.ok) {
+          const raw = await res.json();
+          b = raw.bilty ?? raw;
+          cacheBiltyDetail(biltyId, b!).catch(() => {});
+        }
+      }
+
+      // Fallback to previously cached detail
+      if (!b) b = await loadCachedBiltyDetail(biltyId);
+
+      if (!b) {
+        setSaveError('Cannot load bilty for printing — open it online first to cache it.');
+        return;
+      }
+
+      // Resolve template: state -> IDB cache -> API
+      let tpl: PrimaryTemplate | null = primaryTemplate;
+      if (!tpl) tpl = await loadMasterCache<PrimaryTemplate>(CACHE_KEYS.PRIMARY_TPL);
+      if (!tpl && navigator.onLine) {
+        const tr = await apiFetch('/v1/bilty-setting/templates/primary');
+        if (tr.ok) { const d = await tr.json(); tpl = d.template ?? d; }
+      }
+
+      const emptyTpl: PrimaryTemplate = { template_id: '', code: '', name: '', slug: '', metadata: null, is_primary: false, is_active: true };
+      const blobUrl = (tpl?.slug ?? '') === 'second-a4-template'
+        ? generateSecondA4(b, tpl!)
+        : generateFirstA4(b, tpl ?? emptyTpl);
+
+      setPreviewUrl(blobUrl);
+    } catch (err) {
+      console.error('Print error', err);
+    } finally { setPrinting(false); }
   }
+
+  // ── Load for edit (offline-safe) ──────────────────────────────────────────
+
+  async function loadForEdit(bilty_id: string) {
+    // Offline-pending bilty
+    if (bilty_id.startsWith('offline:')) {
+      const localId = parseInt(bilty_id.split(':')[1], 10);
+      const p = await getPendingBiltyByLocalId(localId);
+      if (!p) return;
+      setForm({
+        bilty_type:       p.bilty_type       as BiltyForm['bilty_type'],
+        gr_no:            p.gr_no_provisional,
+        bilty_date:       p.bilty_date,
+        consignor_id:     p.consignor_id     ?? '',
+        consignor_name:   p.consignor_name,
+        consignor_gstin:  p.consignor_gstin  ?? '',
+        consignor_mobile: p.consignor_mobile ?? '',
+        consignee_id:     p.consignee_id     ?? '',
+        consignee_name:   p.consignee_name,
+        consignee_gstin:  p.consignee_gstin  ?? '',
+        consignee_mobile: p.consignee_mobile ?? '',
+        transport_id:     p.transport_id     ?? '',
+        transport_name:   p.transport_name   ?? '',
+        transport_gstin:  p.transport_gstin  ?? '',
+        transport_mobile: p.transport_mobile ?? '',
+        from_city_id:     p.from_city_id     ?? '',
+        to_city_id:       p.to_city_id       ?? '',
+        delivery_type:    p.delivery_type    as BiltyForm['delivery_type'],
+        payment_mode:     p.payment_mode     as BiltyForm['payment_mode'],
+        contain:          p.contain          ?? '',
+        invoice_no:       p.invoice_no       ?? '',
+        invoice_value:    p.invoice_value    != null ? String(p.invoice_value)    : '',
+        invoice_date:     p.invoice_date     ?? '',
+        document_number:  p.document_number  ?? '',
+        pvt_marks:        p.pvt_marks        ?? '',
+        no_of_pkg:        p.no_of_pkg        != null ? String(p.no_of_pkg)        : '',
+        weight:           p.weight           != null ? String(p.weight)           : '',
+        actual_weight:    p.actual_weight    != null ? String(p.actual_weight)    : '',
+        labour_rate:      '',
+        rate:             p.rate             != null ? String(p.rate)             : '',
+        freight_amount:   p.freight_amount   != null ? String(p.freight_amount)   : '',
+        labour_charge:    p.labour_charge    != null ? String(p.labour_charge)    : '',
+        bill_charge:      p.bill_charge      != null ? String(p.bill_charge)      : '',
+        toll_charge:      p.toll_charge      != null ? String(p.toll_charge)      : '',
+        dd_charge:        p.dd_charge        != null ? String(p.dd_charge)        : '',
+        pf_charge:        p.pf_charge        != null ? String(p.pf_charge)        : '',
+        local_charge:     p.local_charge     != null ? String(p.local_charge)     : '',
+        other_charge:     p.other_charge     != null ? String(p.other_charge)     : '',
+        total_amount:     p.total_amount     != null ? String(p.total_amount)     : '',
+        saving_option:    'SAVE',
+        remark:           p.remark           ?? '',
+        discount_id:      p.discount_id      ?? '',
+      });
+      const ewbs = (p.e_way_bills ?? []).map(e => e.ewb_no).filter(Boolean);
+      setEwbNumbers(ewbs.length > 0 ? ewbs : ['']);
+      setEditBiltyId(bilty_id);
+      setSavedJson(null); setSaveError('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Server bilty: try API, fallback to IDB cache
+    let raw: Record<string, unknown> | null = null;
+    if (navigator.onLine) {
+      const res = await apiFetch(`/v1/bilty/${bilty_id}`);
+      if (res.ok) {
+        raw = await res.json();
+        cacheBiltyDetail(bilty_id, (raw!.bilty ?? raw) as BiltyData).catch(() => {});
+      }
+    }
+    if (!raw) {
+      const cached = await loadCachedBiltyDetail(bilty_id);
+      if (cached) raw = { bilty: cached };
+    }
+    if (!raw) return;
+
+    const b = (raw.bilty ?? raw) as Record<string, unknown>;
+    setForm({
+      bilty_type:       ((b.bilty_type as string) ?? 'REGULAR') as BiltyForm['bilty_type'],
+      gr_no:            (b.gr_no            as string) ?? '',
+      bilty_date:       (b.bilty_date       as string) ?? '',
+      consignor_id:     (b.consignor_id     as string) ?? '',
+      consignor_name:   (b.consignor_name   as string) ?? '',
+      consignor_gstin:  (b.consignor_gstin  as string) ?? '',
+      consignor_mobile: (b.consignor_mobile as string) ?? '',
+      consignee_id:     (b.consignee_id     as string) ?? '',
+      consignee_name:   (b.consignee_name   as string) ?? '',
+      consignee_gstin:  (b.consignee_gstin  as string) ?? '',
+      consignee_mobile: (b.consignee_mobile as string) ?? '',
+      transport_id:     (b.transport_id     as string) ?? '',
+      transport_name:   (b.transport_name   as string) ?? '',
+      transport_gstin:  (b.transport_gstin  as string) ?? '',
+      transport_mobile: (b.transport_mobile as string) ?? '',
+      from_city_id:     (b.from_city_id     as string) ?? '',
+      to_city_id:       (b.to_city_id       as string) ?? '',
+      delivery_type:    (b.delivery_type    as BiltyForm['delivery_type'])  ?? 'DOOR',
+      payment_mode:     (b.payment_mode     as BiltyForm['payment_mode'])   ?? 'PAID',
+      contain:          (b.contain          as string) ?? '',
+      invoice_no:       (b.invoice_no       as string) ?? '',
+      invoice_value:    b.invoice_value    != null ? String(b.invoice_value)    : '',
+      invoice_date:     (b.invoice_date     as string) ?? '',
+      document_number:  (b.document_number  as string) ?? '',
+      pvt_marks:        (b.pvt_marks        as string) ?? '',
+      no_of_pkg:        b.no_of_pkg         != null ? String(b.no_of_pkg)         : '',
+      weight:           b.weight            != null ? String(b.weight)            : '',
+      actual_weight:    b.actual_weight     != null ? String(b.actual_weight)     : '',
+      labour_rate:      b.labour_rate       != null ? String(b.labour_rate)       : '',
+      rate:             b.rate              != null ? String(b.rate)              : '',
+      freight_amount:   b.freight_amount    != null ? String(b.freight_amount)    : '',
+      labour_charge:    b.labour_charge     != null ? String(b.labour_charge)     : '',
+      bill_charge:      b.bill_charge       != null ? String(b.bill_charge)       : '',
+      toll_charge:      b.toll_charge       != null ? String(b.toll_charge)       : '',
+      dd_charge:        b.dd_charge         != null ? String(b.dd_charge)         : '',
+      pf_charge:        b.pf_charge         != null ? String(b.pf_charge)         : '',
+      local_charge:     b.local_charge      != null ? String(b.local_charge)      : '',
+      other_charge:     b.other_charge      != null ? String(b.other_charge)      : '',
+      total_amount:     b.total_amount      != null ? String(b.total_amount)      : '',
+      saving_option:    'SAVE',
+      remark:           (b.remark           as string) ?? '',
+      discount_id:      (b.discount_id      as string) ?? '',
+    });
+    const ewbs: string[] = ((b.e_way_bills as { ewb_no: string }[] | undefined) ?? []).map(e => e.ewb_no).filter(Boolean);
+    setEwbNumbers(ewbs.length > 0 ? ewbs : ['']);
+    setEditBiltyId(bilty_id);
+    setSavedJson(null); setSaveError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaveError(''); setSaving(true); setSavedJson(null);
 
     try {
+      const validEwbs = ewbNumbers.filter(n => n.trim());
       const body: Record<string, unknown> = {
         bilty_type:     'REGULAR',
         bilty_date:     form.bilty_date || new Date().toISOString().split('T')[0],
@@ -443,8 +378,7 @@ export default function BiltyPage() {
       if (form.invoice_date)     body.invoice_date      = form.invoice_date;
       if (form.document_number)  body.document_number   = form.document_number;
       if (form.pvt_marks)        body.pvt_marks         = form.pvt_marks;
-      const validEwbs = ewbNumbers.filter(n => n.trim());
-      if (validEwbs.length > 0)  body.e_way_bills = validEwbs.map(ewb_no => ({ ewb_no }));
+      if (validEwbs.length > 0)  body.e_way_bills       = validEwbs.map(ewb_no => ({ ewb_no }));
       if (form.no_of_pkg)        body.no_of_pkg         = parseInt(form.no_of_pkg);
       if (form.weight)           body.weight            = parseFloat(form.weight);
       if (form.actual_weight)    body.actual_weight     = parseFloat(form.actual_weight);
@@ -461,10 +395,22 @@ export default function BiltyPage() {
       if (form.discount_id)      body.discount_id       = form.discount_id;
       if (form.remark)           body.remark            = form.remark;
 
-      // ── Offline path (new bilties only) ──────────────────────────────────
-      if (!navigator.onLine && !editBiltyId) {
-        const { gr_no_provisional } = await queueOfflineBilty(body, ewbNumbers);
-        setSavedJson({ offline: true, gr_no_provisional });
+      // Offline path
+      if (!navigator.onLine) {
+        if (editBiltyId?.startsWith('offline:')) {
+          const localId = parseInt(editBiltyId.split(':')[1], 10);
+          await updatePendingBilty(localId, {
+            ...(body as Record<string, unknown>),
+            e_way_bills: validEwbs.map(ewb_no => ({ ewb_no })),
+          });
+          setSavedJson({ offline: true, gr_no_provisional: form.gr_no });
+        } else if (!editBiltyId) {
+          const { gr_no_provisional } = await queueOfflineBilty(body, ewbNumbers);
+          setSavedJson({ offline: true, gr_no_provisional });
+        } else {
+          setSaveError('Cannot edit a synced bilty while offline.');
+          return;
+        }
         setSaveError('');
         resetForm();
         await loadRecent(0);
@@ -472,13 +418,12 @@ export default function BiltyPage() {
         return;
       }
 
-      const path   = editBiltyId ? `/v1/bilty/${editBiltyId}` : `/v1/bilty`;
-      const method = editBiltyId ? 'PATCH' : 'POST';
+      // Online path
+      const isOfflineEdit = editBiltyId?.startsWith('offline:');
+      const path   = editBiltyId && !isOfflineEdit ? `/v1/bilty/${editBiltyId}` : '/v1/bilty';
+      const method = editBiltyId && !isOfflineEdit ? 'PATCH' : 'POST';
 
-      const res = await apiFetch(path, {
-        method,
-        body: JSON.stringify(body),
-      });
+      const res  = await apiFetch(path, { method, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) {
         setSaveError(
@@ -491,82 +436,22 @@ export default function BiltyPage() {
 
       setSavedJson(data);
       const biltyId: string = data.bilty?.bilty_id ?? data.bilty_id ?? '';
-      const wasRegularNew = !editBiltyId;
+      const wasNew = !editBiltyId || isOfflineEdit;
 
       setEditBiltyId(null);
       loadRecent(0);
       refreshPendingCount();
 
-      if (biltyId && form.saving_option !== 'DRAFT') {
-        await printBilty(biltyId);
-      }
+      if (biltyId && form.saving_option !== 'DRAFT') await printBilty(biltyId);
       resetForm();
-      // Step 3: re-fetch primary book to get updated current_number → new GR preview
-      if (wasRegularNew) {
-        await refreshPrimaryBook();
-      }
+      if (wasNew) await refreshPrimaryBook();
     } catch (err) {
       setSaveError('Unable to reach the server.');
       console.error(err);
     } finally { setSaving(false); }
   }
 
-  async function loadForEdit(bilty_id: string) {
-    const res = await apiFetch(`/v1/bilty/${bilty_id}`);
-    if (!res.ok) return;
-    const raw = await res.json();
-    const b = raw.bilty ?? raw;
-    setForm({
-      bilty_type:       b.bilty_type ?? 'REGULAR',
-      gr_no:            b.gr_no ?? '',
-      bilty_date:       b.bilty_date ?? '',
-      consignor_id:     b.consignor_id ?? '',
-      consignor_name:   b.consignor_name ?? '',
-      consignor_gstin:  b.consignor_gstin ?? '',
-      consignor_mobile: b.consignor_mobile ?? '',
-      consignee_id:     b.consignee_id ?? '',
-      consignee_name:   b.consignee_name ?? '',
-      consignee_gstin:  b.consignee_gstin ?? '',
-      consignee_mobile: b.consignee_mobile ?? '',
-      transport_id:     b.transport_id ?? '',
-      transport_name:   b.transport_name ?? '',
-      transport_gstin:  b.transport_gstin ?? '',
-      transport_mobile: b.transport_mobile ?? '',
-      from_city_id:     b.from_city_id ?? '',
-      to_city_id:       b.to_city_id ?? '',
-      delivery_type:    b.delivery_type ?? 'DOOR',
-      payment_mode:     b.payment_mode ?? 'PAID',
-      contain:          b.contain ?? '',
-      invoice_no:       b.invoice_no ?? '',
-      invoice_value:    b.invoice_value != null ? String(b.invoice_value) : '',
-      invoice_date:     b.invoice_date ?? '',
-      document_number:  b.document_number ?? '',
-      pvt_marks:        b.pvt_marks ?? '',
-      no_of_pkg:        b.no_of_pkg != null ? String(b.no_of_pkg) : '',
-      weight:           b.weight != null ? String(b.weight) : '',
-      actual_weight:    b.actual_weight != null ? String(b.actual_weight) : '',
-      labour_rate:      b.labour_rate != null ? String(b.labour_rate) : '',
-      rate:             b.rate != null ? String(b.rate) : '',
-      freight_amount:   b.freight_amount != null ? String(b.freight_amount) : '',
-      labour_charge:    b.labour_charge != null ? String(b.labour_charge) : '',
-      bill_charge:      b.bill_charge != null ? String(b.bill_charge) : '',
-      toll_charge:      b.toll_charge != null ? String(b.toll_charge) : '',
-      dd_charge:        b.dd_charge != null ? String(b.dd_charge) : '',
-      pf_charge:        b.pf_charge != null ? String(b.pf_charge) : '',
-      local_charge:     b.local_charge != null ? String(b.local_charge) : '',
-      other_charge:     b.other_charge != null ? String(b.other_charge) : '',
-      total_amount:     b.total_amount != null ? String(b.total_amount) : '',
-      saving_option:    'SAVE',
-      remark:           b.remark ?? '',
-      discount_id:      b.discount_id ?? '',
-    });
-    // Restore EWB numbers from the bilty
-    const ewbs: string[] = (b.e_way_bills ?? []).map((e: { ewb_no: string }) => e.ewb_no).filter(Boolean);
-    setEwbNumbers(ewbs.length > 0 ? ewbs : ['']);
-    setEditBiltyId(bilty_id);
-    setSavedJson(null); setSaveError('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+  // ── Cancel ────────────────────────────────────────────────────────────────
 
   async function handleCancel() {
     if (!cancelId || !cancelReason.trim()) return;
@@ -580,56 +465,13 @@ export default function BiltyPage() {
     } finally { setCancelling(false); }
   }
 
-  async function printBilty(biltyId: string) {
-    setPrinting(true);
-    try {
-      // 1. Fetch full bilty
-      const res = await apiFetch(`/v1/bilty/${biltyId}`);
-      if (!res.ok) return;
-      const raw = await res.json();
-      const b: BiltyData = raw.bilty ?? raw;
-
-      // 2. Use the primaryTemplate already in state (loaded at screen open).
-      //    Re-fetch it fresh in case metadata changed.
-      let tpl = primaryTemplate;
-      if (!tpl) {
-        const tr = await apiFetch(`/v1/bilty-setting/templates/primary`);
-        if (tr.ok) tpl = (await tr.json()).template ?? (await tr.json());
-      }
-
-      // 3. Pick renderer by slug — falls back to first-a4-template
-      let blobUrl: string;
-      const slug = tpl?.slug ?? '';
-      if (slug === 'second-a4-template') {
-        blobUrl = generateSecondA4(b, tpl!);
-      } else {
-        // default / first-a4-template
-        blobUrl = generateFirstA4(b, tpl ?? { template_id: '', code: '', name: '', slug: '', metadata: null, is_primary: false, is_active: true });
-      }
-
-      setPreviewUrl(blobUrl);
-    } catch (err) {
-      console.error('Print error', err);
-    } finally { setPrinting(false); }
-  }
-
-  async function refreshPrimaryBook() {
-    try {
-      const res = await apiFetch(`/v1/bilty-setting/books/primary?bilty_type=REGULAR`);
-      if (res.ok) {
-        const raw = await res.json();
-        setPrimaryBook(raw.book ?? raw);
-        setNoPrimaryBook(false);
-      }
-    } catch { /* silent */ }
-  }
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div>
       {previewUrl && <PdfPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
       <OfflineBanner pendingCount={pendingCount} syncing={syncing} />
 
-      {/* ── Header ── */}
       <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-bold text-slate-900">Bilty</h1>
@@ -644,40 +486,67 @@ export default function BiltyPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Editing #{form.gr_no}
+              {editBiltyId.startsWith('offline:') ? `Editing offline draft (${form.gr_no})` : `Editing #${form.gr_no}`}
               <button type="button" onClick={resetForm} className="ml-1 text-amber-500 hover:text-amber-700 text-xs underline">
                 Cancel edit
               </button>
             </span>
           )}
-          {/* Search existing bilties */}
           <BiltySearchBar recent={recent} loading={recentLoading} onSelect={id => loadForEdit(id)} />
         </div>
       </div>
 
-      {/* ── Form ── */}
+      {cancelId && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-red-700">Cancel reason:</span>
+          <input
+            value={cancelReason}
+            onChange={e => setCancelReason(e.target.value)}
+            className="flex-1 text-sm border border-red-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-300"
+            placeholder="Enter deletion reason..."
+          />
+          <button onClick={handleCancel} disabled={!cancelReason.trim() || cancelling}
+            className="px-4 py-1.5 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">
+            {cancelling ? 'Cancelling...' : 'Confirm cancel'}
+          </button>
+          <button onClick={() => { setCancelId(null); setCancelReason(''); }}
+            className="text-sm text-slate-500 hover:text-slate-700 underline">Dismiss</button>
+        </div>
+      )}
+
+      {hasMorePages && recent.length > 0 && (
+        <div className="mb-3 text-right">
+          <button type="button" onClick={() => loadRecent(recentPage + 1)} disabled={recentLoading}
+            className="text-xs text-indigo-600 hover:underline disabled:opacity-40">
+            {recentLoading ? 'Loading...' : 'Load older bilties'}
+          </button>
+        </div>
+      )}
+
       {dropLoading ? (
-        <div className="py-20 text-center text-sm text-slate-400">Loading…</div>
+        <div className="py-20 text-center text-sm text-slate-400">Loading...</div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
-        <form onSubmit={handleSave} className="space-y-2">
-          <SectionGrBook
-            form={form} primaryBook={primaryBook} noPrimaryBook={noPrimaryBook}
-            grPreview={grPreview} editBiltyId={editBiltyId} sf={sf} cities={cities}
-          />
-          <SectionRouteTransport form={form} cities={cities} transports={transports} sf={sf} selectTransport={selectTransport} onToCitySelect={handleToCitySelect} />
-          <SectionConsignor form={form} consignors={consignors} sf={sf} selectConsignor={selectConsignor} />
-          <SectionConsignee form={form} consignees={consignees} sf={sf} selectConsignee={selectConsignee} />
-          <SectionShipment form={form} sf={sf} />
-          <SectionInvoice form={form} sf={sf} />
-          <SectionEwb ewbNumbers={ewbNumbers} setEwbNumbers={setEwbNumbers} />
-          <SectionCharges form={form} sf={sf} />
-          <SectionFormActions
-            form={form} saving={saving} editBiltyId={editBiltyId}
-            saveError={saveError} savedJson={savedJson}
-            sf={sf} onReset={resetForm} onDismiss={() => setSavedJson(null)}
-          />
-        </form>
+          <form onSubmit={handleSave} className="space-y-2">
+            <SectionGrBook
+              form={form} primaryBook={primaryBook} noPrimaryBook={noPrimaryBook}
+              grPreview={grPreview} editBiltyId={editBiltyId} sf={sf} cities={cities}
+            />
+            <SectionRouteTransport form={form} cities={cities} transports={transports} sf={sf} selectTransport={selectTransport} onToCitySelect={handleToCitySelect} />
+            <SectionConsignor form={form} consignors={consignors} sf={sf} selectConsignor={selectConsignor} />
+            <SectionConsignee form={form} consignees={consignees} sf={sf} selectConsignee={selectConsignee} />
+            <SectionShipment form={form} sf={sf} />
+            <SectionInvoice form={form} sf={sf} />
+            <SectionEwb ewbNumbers={ewbNumbers} setEwbNumbers={setEwbNumbers} />
+            <SectionCharges form={form} sf={sf} />
+            <SectionDiscount form={form} discounts={discounts} sf={sf} />
+            <SectionRemark form={form} sf={sf} />
+            <SectionFormActions
+              form={form} saving={saving || printing} editBiltyId={editBiltyId}
+              saveError={saveError} savedJson={savedJson}
+              sf={sf} onReset={resetForm} onDismiss={() => setSavedJson(null)}
+            />
+          </form>
         </div>
       )}
     </div>

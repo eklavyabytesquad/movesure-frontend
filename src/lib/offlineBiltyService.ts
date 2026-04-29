@@ -117,6 +117,78 @@ export async function markSyncError(localId: number, error: string): Promise<voi
   } catch { /* best-effort */ }
 }
 
+// ── Offline bilty accessors ───────────────────────────────────────────────────
+
+/** Load a single pending bilty by its IDB local_id. */
+export async function getPendingBiltyByLocalId(localId: number): Promise<PendingBilty | null> {
+  try {
+    const { getDb } = await import('./offlineDb');
+    const db = await getDb();
+    return (await db.get('pending_bilties', localId) as PendingBilty | undefined) ?? null;
+  } catch { return null; }
+}
+
+/** Overwrite fields of an existing pending bilty (e.g. after offline edit). */
+export async function updatePendingBilty(localId: number, updates: Partial<PendingBilty>): Promise<void> {
+  try {
+    const { getDb } = await import('./offlineDb');
+    const db = await getDb();
+    const existing = await db.get('pending_bilties', localId) as PendingBilty | undefined;
+    if (existing) await db.put('pending_bilties', { ...existing, ...updates });
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Convert a PendingBilty into the BiltyData shape expected by PDF templates.
+ * @param cityMap  Record<city_id, city_name> — built from the cached cities list.
+ */
+export function pendingToBiltyData(
+  b: PendingBilty,
+  cityMap: Record<string, string>,
+): import('@/components/dashboard/bilty/templates/first-a4-template').BiltyData {
+  return {
+    gr_no:            b.gr_no_provisional,
+    bilty_date:       b.bilty_date,
+    bilty_type:       b.bilty_type,
+    payment_mode:     b.payment_mode,
+    delivery_type:    b.delivery_type,
+    consignor_name:   b.consignor_name,
+    consignor_gstin:  b.consignor_gstin,
+    consignor_mobile: b.consignor_mobile,
+    consignee_name:   b.consignee_name,
+    consignee_gstin:  b.consignee_gstin,
+    consignee_mobile: b.consignee_mobile,
+    transport_name:   b.transport_name,
+    transport_gstin:  b.transport_gstin,
+    transport_mobile: b.transport_mobile,
+    from_city_id:     b.from_city_id,
+    from_city_name:   b.from_city_id ? cityMap[b.from_city_id] : undefined,
+    to_city_id:       b.to_city_id,
+    to_city_name:     b.to_city_id   ? cityMap[b.to_city_id]   : undefined,
+    contain:          b.contain,
+    no_of_pkg:        b.no_of_pkg,
+    weight:           b.weight,
+    actual_weight:    b.actual_weight,
+    rate:             b.rate,
+    pvt_marks:        b.pvt_marks,
+    document_number:  b.document_number,
+    invoice_no:       b.invoice_no,
+    invoice_value:    b.invoice_value,
+    invoice_date:     b.invoice_date,
+    e_way_bills:      b.e_way_bills,
+    freight_amount:   b.freight_amount,
+    labour_charge:    b.labour_charge,
+    bill_charge:      b.bill_charge,
+    toll_charge:      b.toll_charge,
+    dd_charge:        b.dd_charge,
+    pf_charge:        b.pf_charge,
+    local_charge:     b.local_charge,
+    other_charge:     b.other_charge,
+    total_amount:     b.total_amount,
+    remark:           b.remark,
+  };
+}
+
 // ── Display helpers ───────────────────────────────────────────────────────────
 
 /** Convert a PendingBilty into a BiltySummary-compatible shape for the recent list. */
