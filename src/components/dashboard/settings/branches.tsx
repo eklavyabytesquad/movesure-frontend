@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SubmitButton, ActionButton } from './ui';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -25,8 +26,8 @@ const BRANCH_TYPES = [
 export default function BranchesManager() {
   const router = useRouter();
   const { can } = usePermissions();
-  const canCreate = can(SLUGS.MASTER_CREATE);
-  const canUpdate = can(SLUGS.MASTER_UPDATE);
+  const canCreate = can(SLUGS.MASTER_BRANCHES_CREATE);
+  const canUpdate = can(SLUGS.MASTER_BRANCHES_UPDATE);
 
   const [branches, setBranches]     = useState<Branch[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -46,21 +47,11 @@ export default function BranchesManager() {
     name: '', branch_code: '', branch_type: 'branch', address: '',
   });
 
-  function getToken_() {
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return null; }
-    return token;
-  }
-
   async function fetchBranches() {
     setLoading(true);
     setError('');
-    const token = getToken_();
-    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/v1/master/branches`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/v1/master/branches`);
       if (res.status === 401) { router.replace('/auth/login'); return; }
       if (!res.ok) { setError('Failed to load branches.'); return; }
       const data = await res.json();
@@ -84,8 +75,6 @@ export default function BranchesManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken_();
-    if (!token) return;
     try {
       const payload: Record<string, string> = {
         name: form.name.trim(),
@@ -94,9 +83,8 @@ export default function BranchesManager() {
       };
       if (form.address.trim()) payload.address = form.address.trim();
 
-      const res = await fetch(`${API_BASE}/v1/master/branches`, {
+      const res = await apiFetch(`/v1/master/branches`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -126,8 +114,6 @@ export default function BranchesManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken_();
-    if (!token) return;
     try {
       const payload: Record<string, string> = {
         name: editForm.name.trim(),
@@ -137,9 +123,8 @@ export default function BranchesManager() {
       if (editForm.address.trim()) payload.address = editForm.address.trim();
       else payload.address = '';
 
-      const res = await fetch(`${API_BASE}/v1/master/branches/${branch_id}`, {
+      const res = await apiFetch(`/v1/master/branches/${branch_id}`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();

@@ -9,6 +9,10 @@ interface DashboardShellProps {
    * When omitted the content is centred with a max-width container.
    */
   sidebar?: React.ReactNode;
+  /** Skip max-width constraint — content fills the available panel width */
+  fullWidth?: boolean;
+  /** Remove all padding and let the child manage its own scroll/overflow */
+  noPadding?: boolean;
 }
 
 /**
@@ -24,26 +28,32 @@ interface DashboardShellProps {
  * Usage (with sidebar — e.g. settings):
  *   <DashboardShell sidebar={<MySidebar />}>{children}</DashboardShell>
  */
-export default function DashboardShell({ children, sidebar }: DashboardShellProps) {
+export default function DashboardShell({ children, sidebar, fullWidth, noPadding }: DashboardShellProps) {
   const { layout, colors } = uiConfig;
 
   return (
-    <div className={`min-h-screen flex flex-col ${colors.pageBg}`}>
+    <div className={`h-screen overflow-hidden flex flex-col ${colors.pageBg}`}>
       {/* ── Top navigation bar ── */}
       <DashboardNavbar />
 
       {/* ── Body: optional sidebar + main content ── */}
-      <div className="flex flex-1 w-full">
+      <div className="flex flex-1 w-full min-h-0">
         {/* Sidebar slot (rendered as-is — each sidebar owns its own styles) */}
         {sidebar}
 
         {/* Main content area */}
-        <main className="flex-1 overflow-auto">
-          {sidebar ? (
+        <main className={`flex-1 min-h-0 ${noPadding ? 'overflow-hidden flex flex-col' : 'overflow-auto'}`}>
+          {noPadding ? (
+            children
+          ) : sidebar ? (
             /* Sidebar mode: just apply panel padding */
             <div className={layout.panelPadding}>{children}</div>
+          ) : fullWidth ? (
+            <div className={`w-full ${layout.pagePadding} ${layout.pageVerticalPadding}`}>
+              {children}
+            </div>
           ) : (
-            /* Full-width mode: centred with max-width + page padding */
+            /* Centred mode: max-width + page padding */
             <div
               className={`${layout.contentMaxWidth} mx-auto w-full ${layout.pagePadding} ${layout.pageVerticalPadding}`}
             >

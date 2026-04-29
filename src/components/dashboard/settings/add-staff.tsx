@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SearchableDropdown, SubmitButton } from './ui';
 import type { DropdownOption } from './ui';
@@ -45,15 +46,8 @@ export default function AddStaff() {
       router.replace('/auth/login');
       return;
     }
-    const token = getToken();
-    if (!token) {
-      router.replace('/auth/login');
-      return;
-    }
 
-    fetch(`${API_BASE}/v1/staff/branches`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/v1/staff/branches`)
       .then((res) => {
         if (res.status === 401) {
           router.replace('/auth/login');
@@ -85,12 +79,6 @@ export default function AddStaff() {
     setSuccess('');
     setLoading(true);
 
-    const token = getToken();
-    if (!token) {
-      router.replace('/auth/login');
-      return;
-    }
-
     const payload: Record<string, string> = {
       full_name: form.full_name,
       email: form.email,
@@ -101,12 +89,8 @@ export default function AddStaff() {
     if (form.image_url.trim()) payload.image_url = form.image_url.trim();
 
     try {
-      const res = await fetch(`${API_BASE}/v1/staff`, {
+      const res = await apiFetch(`/v1/staff`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify(payload),
       });
 

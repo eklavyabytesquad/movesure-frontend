@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SearchableDropdown, SubmitButton, ActionButton } from './ui';
 import type { DropdownOption } from './ui';
@@ -65,13 +66,9 @@ export default function StaffManagement() {
     async (branchId: string) => {
       setLoadingStaff(true);
       setListError('');
-      const token = getToken();
-      if (!token) { router.replace('/auth/login'); return; }
-      const url = branchId
-        ? `${API_BASE}/v1/staff?branch_id=${branchId}`
-        : `${API_BASE}/v1/staff`;
+      const path = branchId ? `/v1/staff?branch_id=${branchId}` : `/v1/staff`;
       try {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch(path);
         if (res.status === 401) { router.replace('/auth/login'); return; }
         if (!res.ok) { setListError('Failed to load staff.'); return; }
         const data = await res.json();
@@ -88,10 +85,8 @@ export default function StaffManagement() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
-    fetch(`${API_BASE}/v1/staff/branches`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/v1/staff/branches`)
       .then((r) => (r.status === 401 ? (router.replace('/auth/login'), null) : r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -125,8 +120,6 @@ export default function StaffManagement() {
     setAdding(true);
     setAddError('');
     setAddSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     const payload: Record<string, string> = {
       full_name: addForm.full_name,
@@ -138,9 +131,8 @@ export default function StaffManagement() {
     if (addForm.image_url.trim()) payload.image_url = addForm.image_url.trim();
 
     try {
-      const res = await fetch(`${API_BASE}/v1/staff`, {
+      const res = await apiFetch(`/v1/staff`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -176,8 +168,6 @@ export default function StaffManagement() {
     setSaving(true);
     setEditError('');
     setEditSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     const payload: Record<string, string | boolean> = {
       full_name: editForm.full_name,
@@ -188,9 +178,8 @@ export default function StaffManagement() {
     if (editForm.password.trim()) payload.password = editForm.password.trim();
 
     try {
-      const res = await fetch(`${API_BASE}/v1/staff/${selected.id}`, {
+      const res = await apiFetch(`/v1/staff/${selected.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       const data = await res.json();

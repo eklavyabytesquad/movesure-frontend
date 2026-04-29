@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SearchableDropdown, SubmitButton, ActionButton } from './ui';
 import type { DropdownOption } from './ui';
@@ -59,13 +60,11 @@ export default function TransportsManager() {
     async (branchId: string) => {
       setLoading(true);
       setError('');
-      const token = getToken();
-      if (!token) { router.replace('/auth/login'); return; }
       const url = branchId
-        ? `${API_BASE}/v1/master/transports?branch_id=${branchId}`
-        : `${API_BASE}/v1/master/transports`;
+        ? `/v1/master/transports?branch_id=${branchId}`
+        : `/v1/master/transports`;
       try {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch(url);
         if (res.status === 401) { router.replace('/auth/login'); return; }
         if (!res.ok) { setError('Failed to load transports.'); return; }
         const data = await res.json();
@@ -82,10 +81,8 @@ export default function TransportsManager() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
-    fetch(`${API_BASE}/v1/staff/branches`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/v1/staff/branches`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -127,12 +124,9 @@ export default function TransportsManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
     try {
-      const res = await fetch(`${API_BASE}/v1/master/transports`, {
+      const res = await apiFetch(`/v1/master/transports`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       const data = await res.json();
@@ -152,12 +146,9 @@ export default function TransportsManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
     try {
-      const res = await fetch(`${API_BASE}/v1/master/transports/${transport_id}`, {
+      const res = await apiFetch(`/v1/master/transports/${transport_id}`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       });
       const data = await res.json();

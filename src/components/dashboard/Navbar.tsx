@@ -2,13 +2,17 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getUser, clearAuth, type AuthUser } from '@/lib/auth';
-import { invalidatePermissionsCache } from '@/hooks/usePermissions';
+import { getUser, clearAuth, getRefreshToken, type AuthUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { usePermissions, invalidatePermissionsCache } from '@/hooks/usePermissions';
+import { SLUGS } from '@/lib/permissions';
 import { uiConfig } from '@/lib/ui-config';
 import { useRouter, usePathname } from 'next/navigation';
 
 const navLinks = [
-  { href: '/dashboard', label: 'Overview' },
+  { href: '/dashboard',          label: 'Overview' },
+  { href: '/dashboard/bilty',    label: 'Bilty'    },
+  { href: '/dashboard/challan',  label: 'Challan'  },
   { href: '/dashboard/settings', label: 'Settings' },
 ];
 
@@ -31,6 +35,15 @@ export default function DashboardNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { can } = usePermissions();
+
+  // Filter nav links based on permissions (Settings requires settings:access)
+  const visibleNavLinks = navLinks.filter((link) => {
+    if (link.href === '/dashboard/settings') return can(SLUGS.SETTINGS_ACCESS);
+    if (link.href === '/dashboard/bilty')    return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
+    if (link.href === '/dashboard/challan')  return can(SLUGS.CHALLAN_READ) || can(SLUGS.CHALLAN_CREATE);
+    return true;
+  });
 
   useEffect(() => {
     const u = getUser();
@@ -38,10 +51,18 @@ export default function DashboardNavbar() {
     else setUser(u);
   }, [router]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      await apiFetch('/v1/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: getRefreshToken() }),
+      });
+    } catch {
+      // Continue with local logout even if server call fails
+    }
     invalidatePermissionsCache();
     clearAuth();
-    router.push('/auth/login');
+    router.replace('/auth/login');
   }
 
   return (
@@ -63,7 +84,7 @@ export default function DashboardNavbar() {
             <div className="hidden sm:block w-px h-4 bg-slate-200" />
 
             <div className="hidden sm:flex items-center gap-0.5">
-              {navLinks.map((link) => {
+              {visibleNavLinks.map((link) => {
                 const active =
                   link.href === '/dashboard'
                     ? pathname === '/dashboard'
@@ -128,7 +149,7 @@ export default function DashboardNavbar() {
       {/* ── Mobile menu ── */}
       {menuOpen && user && (
         <div className="sm:hidden border-t border-slate-100 bg-white px-4 py-3 space-y-1">
-          {navLinks.map((link) => {
+          {visibleNavLinks.map((link) => {
             const active =
               link.href === '/dashboard'
                 ? pathname === '/dashboard'

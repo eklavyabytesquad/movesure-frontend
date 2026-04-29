@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { SearchableDropdown } from './ui';
 import type { DropdownOption } from './ui';
@@ -34,17 +35,13 @@ export default function ListStaff() {
     async (branchId: string) => {
       setLoading(true);
       setError('');
-      const token = getToken();
-      if (!token) { router.replace('/auth/login'); return; }
 
       const url = branchId
-        ? `${API_BASE}/v1/staff?branch_id=${branchId}`
-        : `${API_BASE}/v1/staff`;
+        ? `/v1/staff?branch_id=${branchId}`
+        : `/v1/staff`;
 
       try {
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(url);
         if (res.status === 401) { router.replace('/auth/login'); return; }
         if (!res.ok) { setError('Failed to load staff.'); return; }
         const data = await res.json();
@@ -61,12 +58,8 @@ export default function ListStaff() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
-    fetch(`${API_BASE}/v1/staff/branches`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/v1/staff/branches`)
       .then((res) => {
         if (res.status === 401) { router.replace('/auth/login'); return null; }
         return res.json();

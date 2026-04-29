@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { ActionButton } from './ui';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -36,12 +37,10 @@ export default function DeactivateStaff() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     Promise.all([
-      fetch(`${API_BASE}/v1/staff`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/v1/staff/branches`, { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch(`/v1/staff`),
+      apiFetch(`/v1/staff/branches`),
     ])
       .then(async ([staffRes, branchRes]) => {
         if (staffRes.status === 401) { router.replace('/auth/login'); return; }
@@ -57,15 +56,12 @@ export default function DeactivateStaff() {
   async function toggleStatus(s: StaffMember) {
     setToggling(s.id);
     setError('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     try {
-      const res = await fetch(`${API_BASE}/v1/staff/${s.id}`, {
+      const res = await apiFetch(`/v1/staff/${s.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ is_active: !s.is_active }),
       });

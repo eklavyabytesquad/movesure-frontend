@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SearchableDropdown, SubmitButton } from './ui';
 import type { DropdownOption } from './ui';
@@ -51,12 +52,10 @@ export default function UpdateStaff() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     Promise.all([
-      fetch(`${API_BASE}/v1/staff`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/v1/staff/branches`, { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch(`/v1/staff`),
+      apiFetch(`/v1/staff/branches`),
     ])
       .then(async ([staffRes, branchRes]) => {
         if (staffRes.status === 401 || branchRes.status === 401) {
@@ -96,8 +95,6 @@ export default function UpdateStaff() {
     setSuccess('');
     setSaving(true);
 
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
     const payload: Record<string, string | boolean> = {
       full_name: form.full_name,
@@ -108,11 +105,10 @@ export default function UpdateStaff() {
     if (form.password.trim()) payload.password = form.password.trim();
 
     try {
-      const res = await fetch(`${API_BASE}/v1/staff/${selected.id}`, {
+      const res = await apiFetch(`/v1/staff/${selected.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });

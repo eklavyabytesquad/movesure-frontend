@@ -24,7 +24,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.status === 200) {
-        saveAuth(data.access_token, data.user);
+        saveAuth(data.access_token, data.refresh_token, data.user, data.expires_in ?? 1800);
         router.push('/dashboard');
       } else if (res.status === 401) {
         setError('Invalid email or password.');

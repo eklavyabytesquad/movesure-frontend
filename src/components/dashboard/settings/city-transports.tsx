@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE, getToken, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { FormInput, SearchableDropdown, SubmitButton, ActionButton } from './ui';
 import type { DropdownOption } from './ui';
@@ -56,16 +57,12 @@ export default function CityTransportsManager() {
     async (branchId: string, cityId: string) => {
       setLoading(true);
       setError('');
-      const token = getToken();
-      if (!token) { router.replace('/auth/login'); return; }
       const params = new URLSearchParams();
       if (branchId) params.set('branch_id', branchId);
       if (cityId) params.set('city_id', cityId);
       const qs = params.toString();
       try {
-        const res = await fetch(`${API_BASE}/v1/master/city-transports${qs ? '?' + qs : ''}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/v1/master/city-transports${qs ? '?' + qs : ''}`);
         if (res.status === 401) { router.replace('/auth/login'); return; }
         if (!res.ok) { setError('Failed to load city-transport links.'); return; }
         const data = await res.json();
@@ -82,14 +79,11 @@ export default function CityTransportsManager() {
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
 
-    const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      fetch(`${API_BASE}/v1/staff/branches`, { headers }).then((r) => r.ok ? r.json() : null),
-      fetch(`${API_BASE}/v1/master/cities`, { headers }).then((r) => r.ok ? r.json() : null),
-      fetch(`${API_BASE}/v1/master/transports`, { headers }).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/staff/branches`, { headers }).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/master/cities`, { headers }).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/master/transports`, { headers }).then((r) => r.ok ? r.json() : null),
     ]).then(([branchData, cityData, transportData]) => {
       if (branchData) setBranches(branchData.branches ?? []);
       if (cityData) setCities(cityData.cities ?? []);
@@ -122,12 +116,9 @@ export default function CityTransportsManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
     try {
-      const res = await fetch(`${API_BASE}/v1/master/city-transports`, {
+      const res = await apiFetch(`/v1/master/city-transports`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       const data = await res.json();
@@ -147,12 +138,9 @@ export default function CityTransportsManager() {
     setSubmitting(true);
     setError('');
     setSuccess('');
-    const token = getToken();
-    if (!token) { router.replace('/auth/login'); return; }
     try {
-      const res = await fetch(`${API_BASE}/v1/master/city-transports/${id}`, {
+      const res = await apiFetch(`/v1/master/city-transports/${id}`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       });
       const data = await res.json();

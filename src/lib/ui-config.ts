@@ -18,17 +18,17 @@ export const uiConfig = {
   /** Page-level layout */
   layout: {
     /** Sidebar width */
-    sidebarWidth: 'w-60',
+    sidebarWidth: 'w-72',
     /** Top navbar height */
     headerHeight: 'h-14',
     /** Max width for centred content pages */
     contentMaxWidth: 'max-w-7xl',
     /** Horizontal padding for centred content area */
-    pagePadding: 'px-6 sm:px-8 lg:px-10',
+    pagePadding: 'px-4 sm:px-6 lg:px-8',
     /** Vertical padding for centred content area */
-    pageVerticalPadding: 'py-8',
+    pageVerticalPadding: 'py-4',
     /** Padding inside the panel when a sidebar is present */
-    panelPadding: 'p-8',
+    panelPadding: 'p-6',
   },
 
   /** Background & surface colours */
