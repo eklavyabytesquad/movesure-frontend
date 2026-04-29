@@ -39,8 +39,8 @@ const emptyForm = {
 export default function TransportsManager() {
   const router = useRouter();
   const { can } = usePermissions();
-  const canCreate = can(SLUGS.MASTER_CREATE);
-  const canUpdate = can(SLUGS.MASTER_UPDATE);
+  const canCreate = can(SLUGS.MASTER_TRANSPORTS_CREATE);
+  const canUpdate = can(SLUGS.MASTER_TRANSPORTS_UPDATE);
   const [transports, setTransports] = useState<Transport[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterBranch, setFilterBranch] = useState('');

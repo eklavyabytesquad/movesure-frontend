@@ -28,8 +28,8 @@ interface Branch {
 export default function StatesManager() {
   const router = useRouter();
   const { can } = usePermissions();
-  const canCreate = can(SLUGS.MASTER_CREATE);
-  const canUpdate = can(SLUGS.MASTER_UPDATE);
+  const canCreate = can(SLUGS.MASTER_STATES_CREATE);
+  const canUpdate = can(SLUGS.MASTER_STATES_UPDATE);
   const [states, setStates] = useState<State[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');

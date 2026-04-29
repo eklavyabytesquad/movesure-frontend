@@ -92,10 +92,10 @@ export default function BiltyRates() {
   useEffect(() => {
     async function loadDropdowns() {
       const [cityRes, crRes, ceRes, tpRes] = await Promise.all([
-        apiFetch(`/v1/master/cities?is_active=true`,               { headers: h }),
-        apiFetch(`/v1/bilty-setting/consignors?is_active=true`,    { headers: h }),
-        apiFetch(`/v1/bilty-setting/consignees?is_active=true`,    { headers: h }),
-        apiFetch(`/v1/master/transports?is_active=true`,           { headers: h }),
+        apiFetch(`/v1/master/cities?is_active=true`),
+        apiFetch(`/v1/bilty-setting/consignors?is_active=true`),
+        apiFetch(`/v1/bilty-setting/consignees?is_active=true`),
+        apiFetch(`/v1/master/transports?is_active=true`),
       ]);
       if (cityRes.ok) { const d = await cityRes.json(); setCities(Array.isArray(d.cities ?? d) ? (d.cities ?? d) : []); }
       if (crRes.ok)   { const d = await crRes.json();   setConsignors(Array.isArray(d.consignors ?? d) ? (d.consignors ?? d) : []); }

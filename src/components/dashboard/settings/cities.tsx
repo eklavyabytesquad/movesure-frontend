@@ -35,8 +35,8 @@ interface Branch {
 export default function CitiesManager() {
   const router = useRouter();
   const { can } = usePermissions();
-  const canCreate = can(SLUGS.MASTER_CREATE);
-  const canUpdate = can(SLUGS.MASTER_UPDATE);
+  const canCreate = can(SLUGS.MASTER_CITIES_CREATE);
+  const canUpdate = can(SLUGS.MASTER_CITIES_UPDATE);
   const [cities, setCities] = useState<City[]>([]);
   const [states, setStates] = useState<State[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);

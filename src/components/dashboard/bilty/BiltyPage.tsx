@@ -7,6 +7,18 @@ import { useRouter } from 'next/navigation';
 import { generateFirstA4 }  from './templates/first-a4-template';
 import { generateSecondA4 } from './templates/second-a4-template';
 import type { BiltyData }   from './templates/first-a4-template';
+import { useOfflineSync }    from '@/hooks/useOfflineSync';
+import {
+  queueOfflineBilty,
+  getPendingBilties,
+  pendingToSummary,
+} from '@/lib/offlineBiltyService';
+import {
+  saveMasterCache,
+  loadMasterCache,
+  CACHE_KEYS,
+} from '@/lib/masterDataCache';
+import { OfflineBanner } from '@/components/common/OfflineBanner';
 
 import {
   BLANK, BiltyForm,
@@ -125,10 +137,11 @@ function BiltySearchBar({
                 <span className="text-xs font-semibold text-slate-800">₹{b.total_amount?.toLocaleString('en-IN') ?? '—'}</span>
                 <span className="text-[10px] text-slate-400 uppercase">{b.payment_mode}</span>
                 <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${
-                  b.status === 'SAVED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                  b.status === 'CANCELLED' ? 'bg-red-50 text-red-600 border-red-200' :
+                  b.status === 'SAVED'         ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                  b.status === 'CANCELLED'     ? 'bg-red-50 text-red-600 border-red-200' :
+                  b.status === 'PENDING_SYNC'  ? 'bg-amber-50 text-amber-700 border-amber-300' :
                   'bg-slate-100 text-slate-600 border-slate-200'
-                }`}>{b.status}</span>
+                }`}>{b.status === 'PENDING_SYNC' ? '⏳ Pending Sync' : b.status}</span>
               </div>
             </button>
           ))}
@@ -181,6 +194,10 @@ export default function BiltyPage() {
   const [recentPage,    setRecentPage]    = useState(0);
   const [hasMorePages,  setHasMorePages]  = useState(true);
 
+  // Offline sync
+  const { pendingCount, syncing, refreshPendingCount } = useOfflineSync({
+    onSynced: () => loadRecent(0),
+  });
 
   // Shared helper: apply book_defaults to form (call AFTER cities/transports are loaded)
   function applyBookDefaults(book: Book | null) {
@@ -203,7 +220,41 @@ export default function BiltyPage() {
     async function load() {
       setDropLoading(true);
       try {
-        // 1. Fetch all in parallel
+        if (!navigator.onLine) {
+          // ── Offline path: restore master data from IndexedDB cache ──────────
+          const [bookData, tplData, crData, ceData, cityData, tpData, discData, ctData] =
+            await Promise.all([
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.PRIMARY_BOOK),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.PRIMARY_TPL),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CONSIGNORS),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CONSIGNEES),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CITIES),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.TRANSPORTS),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.DISCOUNTS),
+              loadMasterCache<Record<string, unknown>>(CACHE_KEYS.CITY_TRANSPORTS),
+            ]);
+          const cityList: City[]      = (cityData as { cities?: City[] } | null)?.cities ?? (cityData as City[] | null) ?? [];
+          const tpList:   Transport[] = (tpData   as { transports?: Transport[] } | null)?.transports ?? (tpData as Transport[] | null) ?? [];
+          setCities(cityList);
+          setTransports(tpList);
+          setConsignors((crData   as { consignors?: Consignor[] } | null)?.consignors ?? (crData   as Consignor[]   | null) ?? []);
+          setConsignees((ceData   as { consignees?: Consignee[] } | null)?.consignees ?? (ceData   as Consignee[]   | null) ?? []);
+          setDiscounts((discData  as { discounts?: BiltyDiscount[] } | null)?.discounts ?? (discData as BiltyDiscount[] | null) ?? []);
+          if (tplData) setPrimaryTemplate((tplData as { template?: PrimaryTemplate }).template ?? tplData as unknown as PrimaryTemplate);
+          const ctLinks: { city_id: string; transport_id: string }[] =
+            (ctData as { city_transports?: { city_id: string; transport_id: string }[] } | null)?.city_transports ?? [];
+          const ctMap: Record<string, string> = {};
+          ctLinks.forEach(l => { if (!ctMap[l.city_id]) ctMap[l.city_id] = l.transport_id; });
+          setCityTransportMap(ctMap);
+          if (bookData) {
+            const book: Book = (bookData as { book?: Book }).book ?? bookData as unknown as Book;
+            setPrimaryBook(book);
+            applyBookDefaults(book);
+          }
+          return;
+        }
+
+        // ── Online path: fetch fresh data from API ───────────────────────────
         const [primaryBookRes, primaryTplRes, crRes, ceRes, cityRes, tpRes, discRes, ctRes] = await Promise.all([
           apiFetch(`/v1/bilty-setting/books/primary?bilty_type=REGULAR`),
           apiFetch(`/v1/bilty-setting/templates/primary`),
@@ -215,7 +266,6 @@ export default function BiltyPage() {
           apiFetch(`/v1/master/city-transports`),
         ]);
 
-        // 2. Parse all JSON in parallel so state sets batch together
         const jsons = await Promise.all([
           (primaryBookRes.ok || primaryBookRes.status === 404) ? primaryBookRes.json().catch(() => null) : Promise.resolve(null),
           primaryTplRes.ok  ? primaryTplRes.json().catch(() => null)  : Promise.resolve(null),
@@ -228,7 +278,6 @@ export default function BiltyPage() {
         ]);
         const [bookData, tplData, crData, ceData, cityData, tpData, discData, ctData] = jsons;
 
-        // 3. Set all reference data first (so city/transport lookups work in applyBookDefaults)
         const cityList: City[]      = cityData?.cities      ?? cityData      ?? [];
         const tpList:   Transport[] = tpData?.transports    ?? tpData        ?? [];
         setCities(cityList);
@@ -238,14 +287,12 @@ export default function BiltyPage() {
         setDiscounts(discData?.discounts  ?? discData  ?? []);
         if (tplData) setPrimaryTemplate(tplData?.template ?? tplData);
 
-        // city-transport map: city_id → transport_id (first match)
         const ctLinks: { city_id: string; transport_id: string }[] =
           ctData?.city_transports ?? ctData?.links ?? [];
         const ctMap: Record<string, string> = {};
         ctLinks.forEach(l => { if (!ctMap[l.city_id]) ctMap[l.city_id] = l.transport_id; });
         setCityTransportMap(ctMap);
 
-        // 4. Apply primary book + defaults AFTER lists are ready
         if (primaryBookRes.status === 404) {
           setNoPrimaryBook(true);
         } else if (bookData) {
@@ -253,6 +300,18 @@ export default function BiltyPage() {
           setPrimaryBook(book);
           applyBookDefaults(book);
         }
+
+        // Persist to IndexedDB so the form works on next offline visit
+        await Promise.all([
+          bookData   ? saveMasterCache(CACHE_KEYS.PRIMARY_BOOK,    bookData)   : Promise.resolve(),
+          tplData    ? saveMasterCache(CACHE_KEYS.PRIMARY_TPL,     tplData)    : Promise.resolve(),
+          crData     ? saveMasterCache(CACHE_KEYS.CONSIGNORS,      crData)     : Promise.resolve(),
+          ceData     ? saveMasterCache(CACHE_KEYS.CONSIGNEES,      ceData)     : Promise.resolve(),
+          cityData   ? saveMasterCache(CACHE_KEYS.CITIES,          cityData)   : Promise.resolve(),
+          tpData     ? saveMasterCache(CACHE_KEYS.TRANSPORTS,      tpData)     : Promise.resolve(),
+          discData   ? saveMasterCache(CACHE_KEYS.DISCOUNTS,       discData)   : Promise.resolve(),
+          ctData     ? saveMasterCache(CACHE_KEYS.CITY_TRANSPORTS, ctData)     : Promise.resolve(),
+        ]);
       } finally { setDropLoading(false); }
     }
     load();
@@ -285,11 +344,21 @@ export default function BiltyPage() {
   const loadRecent = useCallback(async (page = 0) => {
     setRecentLoading(true);
     try {
+      // Always prepend any offline-pending bilties on the first page
+      const pendingItems = page === 0
+        ? (await getPendingBilties().catch(() => [])).map(pendingToSummary)
+        : [];
+
+      if (!navigator.onLine) {
+        if (page === 0) setRecent(pendingItems);
+        return;
+      }
+
       const res = await apiFetch(`/v1/bilty?limit=${LIMIT}&offset=${page * LIMIT}`);
       if (res.ok) {
         const d = await res.json();
         const list: BiltySummary[] = d.bilties ?? d ?? [];
-        setRecent(prev => page === 0 ? list : [...prev, ...list]);
+        setRecent(prev => page === 0 ? [...pendingItems, ...list] : [...prev, ...list]);
         setHasMorePages((d.count ?? list.length) >= LIMIT);
         setRecentPage(page);
       }
@@ -392,6 +461,17 @@ export default function BiltyPage() {
       if (form.discount_id)      body.discount_id       = form.discount_id;
       if (form.remark)           body.remark            = form.remark;
 
+      // ── Offline path (new bilties only) ──────────────────────────────────
+      if (!navigator.onLine && !editBiltyId) {
+        const { gr_no_provisional } = await queueOfflineBilty(body, ewbNumbers);
+        setSavedJson({ offline: true, gr_no_provisional });
+        setSaveError('');
+        resetForm();
+        await loadRecent(0);
+        await refreshPendingCount();
+        return;
+      }
+
       const path   = editBiltyId ? `/v1/bilty/${editBiltyId}` : `/v1/bilty`;
       const method = editBiltyId ? 'PATCH' : 'POST';
 
@@ -415,6 +495,7 @@ export default function BiltyPage() {
 
       setEditBiltyId(null);
       loadRecent(0);
+      refreshPendingCount();
 
       if (biltyId && form.saving_option !== 'DRAFT') {
         await printBilty(biltyId);
@@ -546,6 +627,7 @@ export default function BiltyPage() {
   return (
     <div>
       {previewUrl && <PdfPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
+      <OfflineBanner pendingCount={pendingCount} syncing={syncing} />
 
       {/* ── Header ── */}
       <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

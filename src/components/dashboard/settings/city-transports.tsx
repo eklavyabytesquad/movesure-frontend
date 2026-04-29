@@ -30,8 +30,8 @@ interface Branch { branch_id: string; name: string; branch_code: string; }
 export default function CityTransportsManager() {
   const router = useRouter();
   const { can } = usePermissions();
-  const canCreate = can(SLUGS.MASTER_CREATE);
-  const canUpdate = can(SLUGS.MASTER_UPDATE);
+  const canCreate = can(SLUGS.MASTER_CITY_TRANSPORTS_CREATE);
+  const canUpdate = can(SLUGS.MASTER_CITY_TRANSPORTS_UPDATE);
   const [links, setLinks] = useState<CityTransport[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [transports, setTransports] = useState<Transport[]>([]);
@@ -81,9 +81,9 @@ export default function CityTransportsManager() {
     if (!user) { router.replace('/auth/login'); return; }
 
     Promise.all([
-      apiFetch(`/v1/staff/branches`, { headers }).then((r) => r.ok ? r.json() : null),
-      apiFetch(`/v1/master/cities`, { headers }).then((r) => r.ok ? r.json() : null),
-      apiFetch(`/v1/master/transports`, { headers }).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/staff/branches`).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/master/cities`).then((r) => r.ok ? r.json() : null),
+      apiFetch(`/v1/master/transports`).then((r) => r.ok ? r.json() : null),
     ]).then(([branchData, cityData, transportData]) => {
       if (branchData) setBranches(branchData.branches ?? []);
       if (cityData) setCities(cityData.cities ?? []);

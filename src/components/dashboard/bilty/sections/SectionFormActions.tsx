@@ -48,6 +48,21 @@ export default function SectionFormActions({
       </div>
 
       {savedJson && (
+        ('offline' in (savedJson as Record<string, unknown>) && (savedJson as Record<string, unknown>).offline) ? (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-amber-800">Saved offline</p>
+              <p className="text-[11px] text-amber-700">
+                GR: <span className="font-mono">{String((savedJson as Record<string, unknown>).gr_no_provisional ?? '')}</span>
+                {' '}— will sync automatically when connected.
+              </p>
+            </div>
+            <button type="button" onClick={onDismiss} className="text-amber-500 hover:text-amber-800 text-xs">✕</button>
+          </div>
+        ) : (
         <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700">
             <span className="text-xs font-mono font-semibold text-green-400">
@@ -62,6 +77,7 @@ export default function SectionFormActions({
             {JSON.stringify(savedJson, null, 2)}
           </pre>
         </div>
+        )
       )}
     </>
   );
