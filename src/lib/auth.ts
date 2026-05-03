@@ -1,4 +1,4 @@
-export const API_BASE = 'http://xltfp8ewyj0f7a2qro7ihwed.46.202.162.119.sslip.io';
+export const API_BASE = 'https://movesure-backend-main.onrender.com';
 
 const KEYS = {
   TOKEN:   'ms_token',
