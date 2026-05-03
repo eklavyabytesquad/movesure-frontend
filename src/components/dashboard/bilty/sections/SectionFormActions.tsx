@@ -3,16 +3,18 @@ import { BiltyForm } from '../types';
 interface Props {
   form: BiltyForm;
   saving: boolean;
+  printing?: boolean;
   editBiltyId: string | null;
   saveError: string;
   savedJson: object | null;
   sf: (key: keyof BiltyForm, val: string) => void;
   onReset: () => void;
   onDismiss: () => void;
+  onPrint?: () => void;
 }
 
 export default function SectionFormActions({
-  form, saving, editBiltyId, saveError, savedJson, sf, onReset, onDismiss,
+  form, saving, printing, editBiltyId, saveError, savedJson, sf, onReset, onDismiss, onPrint,
 }: Props) {
   return (
     <>
@@ -36,6 +38,16 @@ export default function SectionFormActions({
           </select>
         </div>
         <div className="flex gap-2">
+          {onPrint && (
+            <button type="button" onClick={onPrint} disabled={printing || saving}
+              className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              {printing ? 'Printing…' : 'Print'}
+            </button>
+          )}
           <button type="button" onClick={onReset}
             className="px-3 py-1 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             Reset

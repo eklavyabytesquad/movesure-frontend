@@ -49,7 +49,8 @@ export default function CitiesManager() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ city_name: '', city_code: '', city_pin_code: '', state_id: '', branch_id: '', is_active: true });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ city_name: '', city_code: '', city_pin_code: '', is_active: true });
+  const [editForm, setEditForm] = useState({ city_name: '', city_code: '', city_pin_code: '', state_id: '', is_active: true });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchCities = useCallback(
     async (branchId: string, stateId: string) => {
@@ -126,7 +127,13 @@ export default function CitiesManager() {
     try {
       const res = await apiFetch(`/v1/master/cities/${city_id}`, {
         method: 'PATCH',
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({
+          city_name:     editForm.city_name,
+          city_code:     editForm.city_code,
+          city_pin_code: editForm.city_pin_code,
+          state_id:      editForm.state_id || undefined,
+          is_active:     editForm.is_active,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.detail ?? 'Failed to update city.'); return; }
@@ -143,11 +150,15 @@ export default function CitiesManager() {
   const stateName = (id: string) => states.find((s) => s.state_id === id)?.state_name ?? id.slice(0, 8) + '…';
   const branchName = (id: string) => branches.find((b) => b.branch_id === id)?.name ?? id.slice(0, 8) + '…';
 
+  const filteredCities = searchQuery
+    ? cities.filter((c) => c.city_name.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_code.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_pin_code.includes(searchQuery))
+    : cities;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-bold text-gray-900">Cities</h1>
-        <span className="text-sm text-gray-400">{cities.length} cit{cities.length !== 1 ? 'ies' : 'y'}</span>
+        <span className="text-sm text-gray-400">{filteredCities.length}{searchQuery ? ` of ${cities.length}` : ''} cit{filteredCities.length !== 1 ? 'ies' : 'y'}</span>
       </div>
       <p className="text-sm text-gray-500 mb-6">Manage cities for your company branches.</p>
 
@@ -173,6 +184,20 @@ export default function CitiesManager() {
           size="sm"
           className="max-w-xs"
         />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search cities…"
+          className="flex-1 min-w-45 max-w-xs rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={() => fetchCities(filterBranch, filterState)}
+          title="Refresh"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          ↻ Refresh
+        </button>
         {canCreate && (
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -246,8 +271,8 @@ export default function CitiesManager() {
 
       {loading ? (
         <div className="py-16 text-center text-sm text-gray-400">Loading cities…</div>
-      ) : cities.length === 0 ? (
-        <div className="py-16 text-center text-sm text-gray-400">No cities found.</div>
+      ) : filteredCities.length === 0 ? (
+        <div className="py-16 text-center text-sm text-gray-400">{searchQuery ? 'No cities match your search.' : 'No cities found.'}</div>
       ) : (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <table className="w-full text-sm">
@@ -263,14 +288,22 @@ export default function CitiesManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {cities.map((c) => (
+              {filteredCities.map((c) => (
                 <tr key={c.city_id} className="hover:bg-gray-50 transition-colors">
                   {editingId === c.city_id ? (
                     <>
                       <td className="px-4 py-3"><FormInput size="sm" value={editForm.city_name} onChange={(e) => setEditForm((f) => ({ ...f, city_name: e.target.value }))} /></td>
                       <td className="px-4 py-3"><FormInput size="sm" className="w-20" value={editForm.city_code} onChange={(e) => setEditForm((f) => ({ ...f, city_code: e.target.value.toUpperCase() }))} /></td>
                       <td className="px-4 py-3"><FormInput size="sm" className="w-24" value={editForm.city_pin_code} onChange={(e) => setEditForm((f) => ({ ...f, city_pin_code: e.target.value }))} /></td>
-                      <td className="px-4 py-3 text-gray-500">{stateName(c.state_id)}</td>
+                      <td className="px-4 py-3">
+                        <SearchableDropdown
+                          size="sm"
+                          value={editForm.state_id}
+                          onChange={(val) => setEditForm((f) => ({ ...f, state_id: val }))}
+                          options={states.map((s): DropdownOption => ({ value: s.state_id, label: s.state_name }))}
+                          placeholder="Select state"
+                        />
+                      </td>
                       <td className="px-4 py-3 text-gray-500">{branchName(c.branch_id)}</td>
                       <td className="px-4 py-3 text-center">
                         <input type="checkbox" checked={editForm.is_active} onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
@@ -296,7 +329,7 @@ export default function CitiesManager() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         {canUpdate && (
-                        <ActionButton variant="edit" onClick={() => { setEditingId(c.city_id); setEditForm({ city_name: c.city_name, city_code: c.city_code, city_pin_code: c.city_pin_code, is_active: c.is_active }); }}>Edit</ActionButton>
+                        <ActionButton variant="edit" onClick={() => { setEditingId(c.city_id); setEditForm({ city_name: c.city_name, city_code: c.city_code, city_pin_code: c.city_pin_code, state_id: c.state_id, is_active: c.is_active }); }}>Edit</ActionButton>
                         )}
                       </td>
                     </>

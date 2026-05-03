@@ -1,5 +1,5 @@
 // New Challan creation form (collapsible panel)
-import { Branch, ChallanBook, bookLabel } from './types';
+import { Branch, ChallanBook, bookLabel } from '../types';
 
 export interface ChallanFormState {
   to_branch_id: string;

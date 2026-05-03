@@ -35,6 +35,7 @@ export default function BranchesManager() {
   const [success, setSuccess]       = useState('');
   const [showForm, setShowForm]     = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Create form
   const [form, setForm] = useState({
@@ -167,29 +168,47 @@ export default function BranchesManager() {
     return map[type] ?? 'bg-slate-50 text-slate-600 border border-slate-200';
   };
 
+  const filteredBranches = searchQuery
+    ? branches.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.branch_code.toLowerCase().includes(searchQuery.toLowerCase()))
+    : branches;
+
   return (
     <div>
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-bold text-slate-900">Branches</h1>
-        <span className="text-sm text-slate-400">{branches.length} branch{branches.length !== 1 ? 'es' : ''}</span>
+        <span className="text-sm text-slate-400">{filteredBranches.length}{searchQuery ? ` of ${branches.length}` : ''} branch{filteredBranches.length !== 1 ? 'es' : ''}</span>
       </div>
       <p className="text-sm text-slate-500 mb-6">Manage your company's branches.</p>
 
       {error   && <div className="mb-4 rounded-lg bg-red-50   border border-red-200   px-4 py-3 text-sm text-red-700  ">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-      {/* ── Add branch toggle ── */}
-      {canCreate && (
-      <div className="mb-5 flex justify-end">
+      {/* ── Toolbar ── */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search branches…"
+          className="flex-1 min-w-45 max-w-xs rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={fetchBranches}
+          title="Refresh"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          ↻ Refresh
+        </button>
+        {canCreate && (
         <button
           onClick={() => { setShowForm((v) => !v); setError(''); setSuccess(''); }}
-          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+          className="ml-auto rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
         >
           {showForm ? 'Cancel' : '+ Add Branch'}
         </button>
+        )}
       </div>
-      )}
 
       {/* ── Create form ── */}
       {showForm && (
@@ -241,9 +260,9 @@ export default function BranchesManager() {
       {/* ── Table ── */}
       {loading ? (
         <div className="py-10 text-center text-sm text-slate-400">Loading branches…</div>
-      ) : branches.length === 0 ? (
+      ) : filteredBranches.length === 0 ? (
         <div className="py-10 text-center text-sm text-slate-400 bg-white rounded-xl border border-slate-200">
-          No branches found. Add your first branch above.
+          {searchQuery ? 'No branches match your search.' : 'No branches found. Add your first branch above.'}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -258,7 +277,7 @@ export default function BranchesManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {branches.map((b) =>
+              {filteredBranches.map((b) =>
                 editingId === b.branch_id ? (
                   /* ── Inline edit row ── */
                   <tr key={b.branch_id} className="bg-indigo-50/40">

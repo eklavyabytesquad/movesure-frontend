@@ -28,6 +28,7 @@ export interface BiltySummary {
   gr_no: string;
   bilty_date: string;
   bilty_type?: string;        // 'REGULAR' | 'MANUAL'
+  status?: string;            // 'DRAFT' | 'SAVED' | 'DISPATCHED' | ...
   consignor_name: string;
   consignee_name: string;
   payment_mode: string;       // 'PAID' | 'TO-PAY' | 'FOC'

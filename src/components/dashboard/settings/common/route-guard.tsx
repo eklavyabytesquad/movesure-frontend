@@ -18,6 +18,8 @@ const ROUTE_PERMISSIONS: Array<{ path: string; slug: string; label: string }> = 
   { path: '/dashboard/settings/transports',       slug: SLUGS.MASTER_TRANSPORTS_READ,        label: 'Transports'         },
   { path: '/dashboard/settings/city-transports',  slug: SLUGS.MASTER_CITY_TRANSPORTS_READ,   label: 'City Transports'    },
   { path: '/dashboard/settings/permissions',      slug: SLUGS.IAM_MANAGE,    label: 'IAM Permissions'    },
+  // Integrations
+  { path: '/dashboard/settings/ewaybill', slug: SLUGS.SETTINGS_ACCESS, label: 'E-Way Bill Settings' },
   // Bilty Settings
   { path: '/dashboard/settings/bilty/books',        slug: SLUGS.BILTY_BOOKS_READ,      label: 'Bilty Books'      },
   { path: '/dashboard/settings/bilty/consignors',   slug: SLUGS.BILTY_CONSIGNORS_READ, label: 'Consignors'       },

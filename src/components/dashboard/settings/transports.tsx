@@ -55,6 +55,7 @@ export default function TransportsManager() {
     transport_name: '', gstin: '', website: '', address: '', is_active: true,
     mobile_number_owner: [{ name: '', mobile: '' }] as MobileEntry[],
   });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchTransports = useCallback(
     async (branchId: string) => {
@@ -165,18 +166,22 @@ export default function TransportsManager() {
 
   const branchName = (id: string) => branches.find((b) => b.branch_id === id)?.name ?? id.slice(0, 8) + '…';
 
+  const filteredTransports = searchQuery
+    ? transports.filter((t) => t.transport_name.toLowerCase().includes(searchQuery.toLowerCase()) || t.transport_code.toLowerCase().includes(searchQuery.toLowerCase()) || (t.gstin ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
+    : transports;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-bold text-gray-900">Transports</h1>
-        <span className="text-sm text-gray-400">{transports.length} transport{transports.length !== 1 ? 's' : ''}</span>
+        <span className="text-sm text-gray-400">{filteredTransports.length}{searchQuery ? ` of ${transports.length}` : ''} transport{filteredTransports.length !== 1 ? 's' : ''}</span>
       </div>
       <p className="text-sm text-gray-500 mb-6">Manage transport vendors for your company branches.</p>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-      <div className="mb-5 flex items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-gray-700 shrink-0">Branch:</label>
         <SearchableDropdown
           value={filterBranch}
@@ -186,6 +191,20 @@ export default function TransportsManager() {
           size="sm"
           className="max-w-xs"
         />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search transports…"
+          className="flex-1 min-w-45 max-w-xs rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={() => fetchTransports(filterBranch)}
+          title="Refresh"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          ↻ Refresh
+        </button>
         {canCreate && (
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -274,11 +293,11 @@ export default function TransportsManager() {
 
       {loading ? (
         <div className="py-16 text-center text-sm text-gray-400">Loading transports…</div>
-      ) : transports.length === 0 ? (
-        <div className="py-16 text-center text-sm text-gray-400">No transports found.</div>
+      ) : filteredTransports.length === 0 ? (
+        <div className="py-16 text-center text-sm text-gray-400">{searchQuery ? 'No transports match your search.' : 'No transports found.'}</div>
       ) : (
         <div className="space-y-3">
-          {transports.map((t) => (
+          {filteredTransports.map((t) => (
             <div key={t.transport_id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
               {editingId === t.transport_id ? (
                 <div className="space-y-3">

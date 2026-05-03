@@ -41,6 +41,7 @@ export default function StatesManager() {
   const [form, setForm] = useState({ state_name: '', state_code: '', branch_id: '', is_active: true });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ state_name: '', state_code: '', is_active: true });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchStates = useCallback(
     async (branchId: string) => {
@@ -128,18 +129,22 @@ export default function StatesManager() {
   const branchName = (id: string) =>
     branches.find((b) => b.branch_id === id)?.name ?? id.slice(0, 8) + '…';
 
+  const filteredStates = searchQuery
+    ? states.filter((s) => s.state_name.toLowerCase().includes(searchQuery.toLowerCase()) || s.state_code.toLowerCase().includes(searchQuery.toLowerCase()))
+    : states;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-bold text-gray-900">States</h1>
-        <span className="text-sm text-gray-400">{states.length} state{states.length !== 1 ? 's' : ''}</span>
+        <span className="text-sm text-gray-400">{filteredStates.length}{searchQuery ? ` of ${states.length}` : ''} state{filteredStates.length !== 1 ? 's' : ''}</span>
       </div>
       <p className="text-sm text-gray-500 mb-6">Manage states for your company branches.</p>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-      <div className="mb-5 flex items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-gray-700 shrink-0">Filter by branch:</label>
         <SearchableDropdown
           value={selectedBranch}
@@ -149,6 +154,20 @@ export default function StatesManager() {
           size="sm"
           className="max-w-xs"
         />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search states…"
+          className="flex-1 min-w-45 max-w-xs rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={() => fetchStates(selectedBranch)}
+          title="Refresh"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          ↻ Refresh
+        </button>
         {canCreate && (
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -205,8 +224,8 @@ export default function StatesManager() {
 
       {loading ? (
         <div className="py-16 text-center text-sm text-gray-400">Loading states…</div>
-      ) : states.length === 0 ? (
-        <div className="py-16 text-center text-sm text-gray-400">No states found.</div>
+      ) : filteredStates.length === 0 ? (
+        <div className="py-16 text-center text-sm text-gray-400">{searchQuery ? 'No states match your search.' : 'No states found.'}</div>
       ) : (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <table className="w-full text-sm">
@@ -221,7 +240,7 @@ export default function StatesManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {states.map((s) => (
+              {filteredStates.map((s) => (
                 <tr key={s.state_id} className="hover:bg-gray-50 transition-colors">
                   {editingId === s.state_id ? (
                     <>

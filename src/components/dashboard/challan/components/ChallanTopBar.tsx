@@ -1,5 +1,5 @@
 // Top header bar: title, challan selector dropdown, status badge, action buttons
-import { Challan, ChallanBook, isChallanEditable, bookLabel } from './types';
+import { Challan, ChallanBook, isChallanEditable, bookLabel } from '../types';
 import ChallanSelector from './ChallanSelector';
 
 const STATUS_COLORS: Record<string, string> = {

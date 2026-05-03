@@ -1,5 +1,5 @@
 // Left sidebar: list of un-dispatched challans with select + overview card
-import { Challan, Branch, isChallanEditable, STATUS_COLORS } from './types';
+import { Challan, Branch, isChallanEditable, STATUS_COLORS } from '../types';
 
 interface Props {
   challans: Challan[];

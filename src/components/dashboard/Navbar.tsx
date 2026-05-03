@@ -10,10 +10,12 @@ import { uiConfig } from '@/lib/ui-config';
 import { useRouter, usePathname } from 'next/navigation';
 
 const navLinks = [
-  { href: '/dashboard',          label: 'Overview' },
-  { href: '/dashboard/bilty',    label: 'Bilty'    },
-  { href: '/dashboard/challan',  label: 'Challan'  },
-  { href: '/dashboard/settings', label: 'Settings' },
+  { href: '/dashboard',           label: 'Overview'   },
+  { href: '/dashboard/bilty',     label: 'Bilty'      },
+  { href: '/dashboard/manual',    label: 'Manual'     },
+  { href: '/dashboard/challan',   label: 'Challan'    },
+  { href: '/dashboard/ewaybill',  label: 'E-Way Bill' },
+  { href: '/dashboard/settings',  label: 'Settings'   },
 ];
 
 function UserAvatar({ name }: { name: string }) {
@@ -39,9 +41,11 @@ export default function DashboardNavbar() {
 
   // Filter nav links based on permissions (Settings requires settings:access)
   const visibleNavLinks = navLinks.filter((link) => {
-    if (link.href === '/dashboard/settings') return can(SLUGS.SETTINGS_ACCESS);
-    if (link.href === '/dashboard/bilty')    return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
-    if (link.href === '/dashboard/challan')  return can(SLUGS.CHALLAN_READ) || can(SLUGS.CHALLAN_CREATE);
+    if (link.href === '/dashboard/settings')  return can(SLUGS.SETTINGS_ACCESS);
+    if (link.href === '/dashboard/bilty')     return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
+    if (link.href === '/dashboard/manual')    return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
+    if (link.href === '/dashboard/challan')   return can(SLUGS.CHALLAN_READ) || can(SLUGS.CHALLAN_CREATE);
+    if (link.href === '/dashboard/ewaybill')  return can(SLUGS.BILTY_READ) || can(SLUGS.CHALLAN_READ);
     return true;
   });
 
@@ -93,10 +97,10 @@ export default function DashboardNavbar() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`px-3 py-1.5 ${uiConfig.radius.button} text-sm transition-colors ${
+                    className={`px-3 py-1.5 ${uiConfig.radius.button} text-sm font-medium transition-colors ${
                       active
-                        ? uiConfig.active.navLink
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                        ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
                     {link.label}

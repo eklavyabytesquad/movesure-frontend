@@ -1,6 +1,6 @@
 // Available (unassigned) bilties panel — bottom section
 import { useState } from 'react';
-import { BiltySummary } from './types';
+import { BiltySummary } from '../types';
 
 interface Props {
   bilties: BiltySummary[];

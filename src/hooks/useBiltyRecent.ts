@@ -20,6 +20,7 @@ import {
 import {
   cacheRecentBilties,
   loadCachedRecentBilties,
+  cacheBiltyDetail,
 } from '@/lib/biltyCache';
 import type { BiltySummary } from '@/components/dashboard/bilty/types';
 
@@ -59,7 +60,19 @@ export function useBiltyRecent() {
       setRecentPage(page);
 
       // Keep offline cache fresh (first page only — no need to paginate cache)
-      if (page === 0) cacheRecentBilties(list).catch(() => {});
+      if (page === 0) {
+        cacheRecentBilties(list).catch(() => {});
+
+        // Pre-cache individual bilty details in the background so they're
+        // available for offline edit/print without any extra user action.
+        // Limit to 20 to avoid too many concurrent requests.
+        list.slice(0, 20).forEach(b => {
+          apiFetch(`/v1/bilty/${b.bilty_id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) cacheBiltyDetail(b.bilty_id, d.bilty ?? d).catch(() => {}); })
+            .catch(() => {});
+        });
+      }
     } finally {
       setRecentLoading(false);
     }

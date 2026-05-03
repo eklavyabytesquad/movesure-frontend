@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { apiFetch }           from '@/lib/api';
 import { generateFirstA4 }    from './templates/first-a4-template';
 import { generateSecondA4 }   from './templates/second-a4-template';
+import { generateThirdA4 }    from './templates/third-a4-template';
 import type { BiltyData }     from './templates/first-a4-template';
 import { useOfflineSync }     from '@/hooks/useOfflineSync';
 import { useBiltyMasterData } from '@/hooks/useBiltyMasterData';
@@ -27,6 +28,7 @@ import {
 } from './types';
 import { PdfPreviewModal } from './ui';
 import BiltySearchBar        from './ui/BiltySearchBar';
+import EwbValidateModal       from './ui/EwbValidateModal';
 import SectionGrBook         from './sections/SectionGrBook';
 import SectionConsignor      from './sections/SectionConsignor';
 import SectionConsignee      from './sections/SectionConsignee';
@@ -56,7 +58,11 @@ export default function BiltyPage() {
 
   // ── Offline sync ──────────────────────────────────────────────────────────
   const { pendingCount, syncing, refreshPendingCount } = useOfflineSync({
-    onSynced: () => loadRecent(0),
+    onSynced: () => {
+      loadRecent(0);
+      // Refresh the book so the GR number shown reflects all newly-synced bilties
+      refreshPrimaryBook();
+    },
   });
 
   // ── Form state ────────────────────────────────────────────────────────────
@@ -71,6 +77,9 @@ export default function BiltyPage() {
   const [savedJson, setSavedJson] = useState<object | null>(null);
   const [printing,  setPrinting]  = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // ── EWB validate ──────────────────────────────────────────────────────────
+  const [showEwbValidate, setShowEwbValidate] = useState(false);
 
   // ── Cancel state ──────────────────────────────────────────────────────────
   const [cancelId,     setCancelId]     = useState<string | null>(null);
@@ -205,9 +214,12 @@ export default function BiltyPage() {
       }
 
       const emptyTpl: PrimaryTemplate = { template_id: '', code: '', name: '', slug: '', metadata: null, is_primary: false, is_active: true };
-      const blobUrl = (tpl?.slug ?? '') === 'second-a4-template'
+      const slug    = tpl?.slug ?? '';
+      const blobUrl = slug === 'second-a4-template'
         ? generateSecondA4(b, tpl!)
-        : generateFirstA4(b, tpl ?? emptyTpl);
+        : slug === 'third-a4-template'
+          ? await generateThirdA4(b, tpl!)
+          : generateFirstA4(b, tpl ?? emptyTpl);
 
       setPreviewUrl(blobUrl);
     } catch (err) {
@@ -275,20 +287,22 @@ export default function BiltyPage() {
       return;
     }
 
-    // Server bilty: try API, fallback to IDB cache
+    // Server bilty: try API first, fall through to IDB cache on any error
     let raw: Record<string, unknown> | null = null;
     if (navigator.onLine) {
-      const res = await apiFetch(`/v1/bilty/${bilty_id}`);
-      if (res.ok) {
-        raw = await res.json();
-        cacheBiltyDetail(bilty_id, (raw!.bilty ?? raw) as BiltyData).catch(() => {});
-      }
+      try {
+        const res = await apiFetch(`/v1/bilty/${bilty_id}`);
+        if (res.ok) {
+          raw = await res.json();
+          cacheBiltyDetail(bilty_id, (raw!.bilty ?? raw) as BiltyData).catch(() => {});
+        }
+      } catch { /* network error — fall through to IDB cache */ }
     }
     if (!raw) {
       const cached = await loadCachedBiltyDetail(bilty_id);
       if (cached) raw = { bilty: cached };
     }
-    if (!raw) return;
+    if (!raw) { setSaveError('Bilty not available offline — open it online first.'); return; }
 
     const b = (raw.bilty ?? raw) as Record<string, unknown>;
     setForm({
@@ -470,6 +484,7 @@ export default function BiltyPage() {
   return (
     <div>
       {previewUrl && <PdfPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
+      {showEwbValidate && <EwbValidateModal onClose={() => setShowEwbValidate(false)} />}
       <OfflineBanner pendingCount={pendingCount} syncing={syncing} />
 
       <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -492,6 +507,16 @@ export default function BiltyPage() {
               </button>
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setShowEwbValidate(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Validate EWB
+          </button>
           <BiltySearchBar recent={recent} loading={recentLoading} onSelect={id => loadForEdit(id)} />
         </div>
       </div>
@@ -542,9 +567,10 @@ export default function BiltyPage() {
             <SectionDiscount form={form} discounts={discounts} sf={sf} />
             <SectionRemark form={form} sf={sf} />
             <SectionFormActions
-              form={form} saving={saving || printing} editBiltyId={editBiltyId}
+              form={form} saving={saving} printing={printing} editBiltyId={editBiltyId}
               saveError={saveError} savedJson={savedJson}
               sf={sf} onReset={resetForm} onDismiss={() => setSavedJson(null)}
+              onPrint={editBiltyId ? () => printBilty(editBiltyId!) : undefined}
             />
           </form>
         </div>

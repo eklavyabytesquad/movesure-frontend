@@ -1,5 +1,5 @@
 // Stats bar — single compact row with all key metrics
-import { BiltySummary } from './types';
+import { BiltySummary } from '../types';
 
 interface Props {
   availBilties: BiltySummary[];

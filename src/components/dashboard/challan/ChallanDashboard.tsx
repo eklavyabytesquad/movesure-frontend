@@ -18,12 +18,14 @@ import {
 } from './templates/challan_a4_landscape_a';
 
 // Section components
-import ChallanTopBar        from './ChallanTopBar';
-import ChallanAlerts        from './ChallanAlerts';
-import ChallanStatsBar      from './ChallanStatsBar';
-import NewChallanForm, { ChallanFormState } from './NewChallanForm';
-import ChallanBiltiesTable  from './ChallanBiltiesTable';
-import AvailableBiltiesPanel from './AvailableBiltiesPanel';
+import ChallanTopBar        from './components/ChallanTopBar';
+import ChallanAlerts        from './components/ChallanAlerts';
+import ChallanStatsBar      from './components/ChallanStatsBar';
+import NewChallanForm, { ChallanFormState } from './components/NewChallanForm';
+import ChallanBiltiesTable  from './components/ChallanBiltiesTable';
+import AvailableBiltiesPanel from './components/AvailableBiltiesPanel';
+import DraftBiltyDashboard  from './draft/DraftBiltyDashboard';
+import TripSheetDashboard   from './TripSheetDashboard';
 
 const DEFAULT_FORM: ChallanFormState = {
   to_branch_id: '', from_branch_id: '', book_id: '',
@@ -60,6 +62,8 @@ export default function ChallanDashboard() {
   const [form, setForm]               = useState<ChallanFormState>({ ...DEFAULT_FORM });
   const [saving, setSaving]           = useState(false);
   const [printing, setPrinting]       = useState(false);
+  const [printUrl, setPrintUrl]       = useState<string | null>(null);
+  const [activeTab, setActiveTab]     = useState<'challan' | 'draft' | 'tripsheet'>('challan');
 
   const selectedChallan = challans.find(c => c.challan_id === selectedId) ?? null;
   const isEditable = selectedChallan ? isChallanEditable(selectedChallan) : false;
@@ -108,10 +112,12 @@ export default function ChallanDashboard() {
       if (biltyRes.ok)  {
         const d = await biltyRes.json();
         const raw: BiltySummary[] = d.bilties ?? d ?? [];
-        setAvailBilties(raw.map(b => ({
-          ...b,
-          to_city_name: b.to_city_name ?? (b.to_city_id ? loadedCityMap[b.to_city_id] : undefined),
-        })));
+        setAvailBilties(raw
+          .filter(b => !b.status || b.status === 'SAVED')
+          .map(b => ({
+            ...b,
+            to_city_name: b.to_city_name ?? (b.to_city_id ? loadedCityMap[b.to_city_id] : undefined),
+          })));
       }
       if (branchRes.ok) { const d = await branchRes.json(); setBranches(d.branches ?? d ?? []); }
       if (bookRes.ok) {
@@ -136,6 +142,21 @@ export default function ChallanDashboard() {
       setLoading(false);
     }
   }, []);
+
+  // Standalone refresh of available bilties (called from Draft tab after status changes)
+  const refreshAvailBilties = useCallback(async () => {
+    const res = await apiFetch('/v1/challan/available-bilties?limit=500');
+    if (res.ok) {
+      const d = await res.json();
+      const raw: BiltySummary[] = d.bilties ?? d ?? [];
+      setAvailBilties(raw
+        .filter(b => !b.status || b.status === 'SAVED')
+        .map(b => ({
+          ...b,
+          to_city_name: b.to_city_name ?? (b.to_city_id ? cityMap[b.to_city_id] : undefined),
+        })));
+    }
+  }, [cityMap]);
 
   useEffect(() => {
     if (!getUser()) { router.replace('/auth/login'); return; }
@@ -298,7 +319,7 @@ export default function ChallanDashboard() {
       };
 
       const blobUrl = generateChallanA4LandscapeA(printData, tpl);
-      window.open(blobUrl, '_blank');
+      setPrintUrl(blobUrl);
     } catch {
       setError('Failed to generate challan PDF.');
     } finally {
@@ -321,6 +342,91 @@ export default function ChallanDashboard() {
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-gray-50 overflow-hidden">
+
+      {/* Print preview modal */}
+      {printUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
+               style={{ width: '90vw', height: '90vh', maxWidth: '1200px' }}>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0">
+              <span className="text-sm font-semibold text-gray-800">Challan Preview</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={printUrl}
+                  download={`challan-${selectedChallan?.challan_no ?? 'print'}.pdf`}
+                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </a>
+                <button
+                  onClick={() => { URL.revokeObjectURL(printUrl); setPrintUrl(null); }}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {/* iframe */}
+            <iframe
+              src={printUrl}
+              className="flex-1 w-full border-0"
+              title="Challan Preview"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tab switcher */}
+      <div className="flex border-b border-gray-200 bg-white shrink-0">
+        <button
+          onClick={() => setActiveTab('challan')}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === 'challan'
+              ? 'border-violet-600 text-violet-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}>
+          Challan
+        </button>
+        <button
+          onClick={() => setActiveTab('draft')}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === 'draft'
+              ? 'border-amber-500 text-amber-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}>
+          Draft Bilties
+        </button>
+        <button
+          onClick={() => setActiveTab('tripsheet')}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === 'tripsheet'
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}>
+          Trip Sheets
+        </button>
+      </div>
+
+      {/* Draft Bilties view */}
+      {activeTab === 'draft' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <DraftBiltyDashboard onAvailRefresh={refreshAvailBilties} />
+        </div>
+      )}
+
+      {/* Trip Sheets view */}
+      {activeTab === 'tripsheet' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <TripSheetDashboard />
+        </div>
+      )}
+
+      {/* Challan view */}
+      {activeTab === 'challan' && <>
 
       {/* Section 1: Top bar — title + challan dropdown + status + action buttons */}
       <ChallanTopBar
@@ -399,6 +505,8 @@ export default function ChallanDashboard() {
           onAdd={addBilty}
         />
       </div>
+
+      </>}
 
     </div>
   );

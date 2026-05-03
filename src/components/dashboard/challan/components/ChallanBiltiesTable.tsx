@@ -1,6 +1,6 @@
 // Challan bilties table — the rich table on the right main panel
 import { useState } from 'react';
-import { BiltySummary } from './types';
+import { BiltySummary } from '../types';
 
 interface Props {
   bilties: BiltySummary[];

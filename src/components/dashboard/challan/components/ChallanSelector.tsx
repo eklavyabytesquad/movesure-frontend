@@ -1,7 +1,7 @@
 // Searchable challan combobox — handles 100+ challans comfortably
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Challan, isChallanEditable } from './types';
+import { Challan, isChallanEditable } from '../types';
 
 interface Props {
   challans: Challan[];
