@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '@/lib/api';
+import { API_BASE, getToken } from '@/lib/auth';
 import { EwbRecord, EwbBilty, STATUS_COLOR, fmtDate } from '../types';
 
 interface Props {
@@ -57,6 +58,8 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
   const [suggestions, setSuggestions]       = useState<CityTransportSuggestion[]>([]);
   const [cityLoading, setCityLoading]       = useState(false);
   const [transfers, setTransfers]           = useState<TransferRecord[]>([]);
+  const [showAllTransports, setShowAllTransports] = useState(false);
+  const [allTransportSearch, setAllTransportSearch] = useState('');
 
   // Pre-load transport master (for GSTIN cross-reference when suggestions come back)
   useEffect(() => {
@@ -123,6 +126,8 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
     setError('');
     setLookupName('');
     setSuggestions([]);
+    setShowAllTransports(false);
+    setAllTransportSearch('');
   }
 
   function set(k: keyof typeof EMPTY_FORM, v: string | boolean) {
@@ -178,7 +183,7 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
       const data = await res.json();
       if (!res.ok) {
         const d = data.detail;
-        setError(typeof d === 'object' ? (d?.error ?? JSON.stringify(d)) : (d ?? 'Update failed.'));
+        setError(typeof d === 'object' ? (d?.error ?? d?.message ?? 'Update failed.') : (d ?? 'Update failed.'));
         return;
       }
 
@@ -207,8 +212,9 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
     }
   }
 
-  const selectedBilty = ewbBiltyMap[selectedEwb];
-  const selectedRec   = validatedEwbs[selectedEwb];
+  const selectedBilty     = ewbBiltyMap[selectedEwb];
+  const selectedRec       = validatedEwbs[selectedEwb];
+  const selectedTransfers = transfers.filter(t => t.ewbNo === selectedEwb);
 
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
@@ -236,6 +242,7 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
                 ? (STATUS_COLOR[rec.ewb_status] ?? 'bg-slate-100 text-slate-600 border-slate-200')
                 : 'bg-slate-100 text-slate-500 border-slate-200';
               const ewbTransfers = transfers.filter(t => t.ewbNo === ewbNo);
+              const wasTransferred = ewbTransfers.length > 0;
 
               return (
                 <button
@@ -244,8 +251,12 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
                   onClick={() => selectEwb(ewbNo)}
                   className={`text-left rounded-xl border-2 p-3 transition-all ${
                     isSelected
-                      ? 'border-indigo-500 bg-indigo-50 shadow-md ring-2 ring-indigo-200'
-                      : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm'
+                      ? wasTransferred
+                        ? 'border-green-500 bg-green-50 shadow-md ring-2 ring-green-200'
+                        : 'border-indigo-500 bg-indigo-50 shadow-md ring-2 ring-indigo-200'
+                      : wasTransferred
+                        ? 'border-green-300 bg-green-50 hover:border-green-400 hover:shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -256,7 +267,12 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
                           {rec.ewb_status}
                         </span>
                       )}
-                      {isSelected && (
+                      {wasTransferred && (
+                        <span className="text-[10px] font-bold text-green-700 bg-green-100 border border-green-300 px-1.5 py-0.5 rounded-full">
+                          ✓ TRANSFERRED
+                        </span>
+                      )}
+                      {isSelected && !wasTransferred && (
                         <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded-full">
                           SELECTED
                         </span>
@@ -308,7 +324,7 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
 
       {/* ── Assignment form ────────────────────────────────────── */}
       {selectedEwb && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <div className={`bg-white rounded-xl border p-5 space-y-4 ${selectedTransfers.length > 0 ? 'border-green-300' : 'border-slate-200'}`}>
           <div className="flex items-start justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-slate-800">Assign Transporter</h3>
@@ -341,6 +357,49 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
               ✕ Deselect
             </button>
           </div>
+
+          {/* ── PDF download for previously transferred EWBs ── */}
+          {selectedTransfers.length > 0 && (
+            <div className="rounded-xl bg-green-50 border border-green-200 p-3 space-y-2">
+              <p className="text-xs font-semibold text-green-800 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Transporter assigned — download updated EWB PDF
+              </p>
+              {selectedTransfers.map((t, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 truncate">{t.transporterName}</p>
+                    <p className="text-[10px] font-mono text-slate-500">{t.transporterId}</p>
+                    <p className="text-[10px] text-slate-400">{new Date(t.updatedAt).toLocaleString('en-IN')}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {t.pdf_url && (
+                      <a href={t.pdf_url} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-300 bg-white text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download PDF
+                      </a>
+                    )}
+                    <a
+                      href={`${API_BASE}/v1/ewaybill/pdf?eway_bill_number=${selectedEwb.replace(/\D/g, '')}&token=${getToken() ?? ''}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      Print EWB
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {cityLoading && (
             <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -378,13 +437,91 @@ export default function EwbTransporterTab({ validatedEwbs, bilties }: Props) {
 
           {!cityLoading && selectedBilty?.to_city_id && suggestions.length === 0 && (
             <p className="text-xs text-slate-400 italic">
-              No city-transport links configured for this destination. Enter transporter manually.
+              No city-transport links configured for this destination. Enter transporter manually or pick from all transports below.
             </p>
           )}
           {!cityLoading && !selectedBilty?.to_city_id && (
             <p className="text-xs text-slate-400 italic">
-              No destination city on this bilty — enter transporter manually.
+              No destination city on this bilty — enter transporter manually or pick from all transports below.
             </p>
+          )}
+
+          {/* ── All transports picker ── */}
+          {!cityLoading && transportMaster.length > 0 && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowAllTransports(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Other Transports ({transportMaster.length})
+                </span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${showAllTransports ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showAllTransports && (
+                <div className="p-3 space-y-2">
+                  <input
+                    value={allTransportSearch}
+                    onChange={e => setAllTransportSearch(e.target.value)}
+                    placeholder="Search by name or GSTIN…"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5">
+                    {transportMaster
+                      .filter(t => {
+                        const q = allTransportSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          t.transport_name.toLowerCase().includes(q) ||
+                          (t.gstin ?? '').toLowerCase().includes(q) ||
+                          (t.transport_code ?? '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map(t => (
+                        <button
+                          key={t.transport_id}
+                          type="button"
+                          onClick={() => {
+                            if (t.gstin) set('transporter_id', t.gstin.toUpperCase());
+                            set('transporter_name', t.transport_name);
+                            setShowAllTransports(false);
+                            setAllTransportSearch('');
+                          }}
+                          className="w-full text-left rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-indigo-300 hover:bg-indigo-50 transition-all"
+                        >
+                          <p className="text-xs font-semibold text-slate-800">{t.transport_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {t.gstin
+                              ? <span className="text-[10px] font-mono text-slate-500">{t.gstin}</span>
+                              : <span className="text-[10px] text-slate-400 italic">No GSTIN on file</span>
+                            }
+                            {t.transport_code && (
+                              <span className="text-[10px] text-slate-400">· {t.transport_code}</span>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    }
+                    {transportMaster.filter(t => {
+                      const q = allTransportSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return t.transport_name.toLowerCase().includes(q) || (t.gstin ?? '').toLowerCase().includes(q);
+                    }).length === 0 && (
+                      <p className="text-xs text-slate-400 text-center py-3 italic">No transports match your search.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3">

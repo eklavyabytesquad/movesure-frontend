@@ -92,7 +92,7 @@ export default function EwbExtendTab({ validatedEwbs }: Props) {
       const data = await res.json();
       if (!res.ok) {
         const d = data.detail;
-        setError(typeof d === 'object' ? (d?.error ?? JSON.stringify(d)) : (d ?? 'Extension failed.'));
+        setError(typeof d === 'object' ? (d?.error ?? d?.message ?? 'Extension failed.') : (d ?? 'Extension failed.'));
         return;
       }
       setResult(data.data ?? data);

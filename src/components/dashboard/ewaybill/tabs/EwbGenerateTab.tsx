@@ -131,7 +131,7 @@ export default function EwbGenerateTab() {
       const data = await res.json();
       if (!res.ok) {
         const d = data.detail;
-        setError(typeof d === 'object' ? (d?.error ?? JSON.stringify(d)) : (d ?? 'Generation failed.'));
+        setError(typeof d === 'object' ? (d?.error ?? d?.message ?? 'Generation failed.') : (d ?? 'Generation failed.'));
         return;
       }
       setResult(data.data ?? data);

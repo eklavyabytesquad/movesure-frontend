@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { EwbRecord, STATUS_COLOR, TRANSPORT_MODES, INDIAN_STATES, fmtDate, toNicDate } from '../types';
 
@@ -7,6 +7,7 @@ interface Props {
   validatedEwbs: Record<string, EwbRecord>;
   vehicleNo?: string;
   tripNo?: string;
+  challanIds?: string[];
 }
 
 interface ConsolidateForm {
@@ -25,7 +26,7 @@ interface CewbResult {
   valid_upto?: string;
 }
 
-export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: Props) {
+export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo, challanIds }: Props) {
   const [selected, setSelected]   = useState<Set<string>>(new Set());
   const [form, setForm]           = useState<ConsolidateForm>(() => ({
     place_of_consignor: '',
@@ -40,10 +41,36 @@ export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: 
   const [result, setResult]       = useState<CewbResult | null>(null);
   const [sessionCewbs, setSessionCewbs] = useState<CewbResult[]>([]);
 
-  // ── Derive existing consolidated EWBs from validated records ──
-  // EWBs with ewb_status === 'CONSOLIDATED' were already consolidated before this session.
-  // We group them by cewb_id (if known) or list individually.
-  const consolidatedEwbs = Object.entries(validatedEwbs)
+  // ── Fetch DB records for all challans on mount ──────────────────────────
+  const [dbRecords, setDbRecords] = useState<Record<string, EwbRecord>>({});
+  const [dbLoading, setDbLoading] = useState(false);
+  const didFetch = useRef(false);
+
+  useEffect(() => {
+    if (!challanIds?.length || didFetch.current) return;
+    didFetch.current = true;
+    setDbLoading(true);
+    Promise.allSettled(
+      challanIds.map(id => apiFetch(`/v1/ewaybill/records?challan_id=${id}`).then(r => r.json()))
+    ).then(results => {
+      const merged: Record<string, EwbRecord> = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.value?.records) {
+          (r.value.records as EwbRecord[]).forEach((rec: EwbRecord) => {
+            const key = String(rec.eway_bill_number);
+            merged[key] = rec;
+          });
+        }
+      });
+      setDbRecords(merged);
+    }).finally(() => setDbLoading(false));
+  }, [challanIds]);
+
+  // In-memory validated state takes priority (fresher than DB snapshot)
+  const allRecords: Record<string, EwbRecord> = { ...dbRecords, ...validatedEwbs };
+
+  // ── Derive existing consolidated EWBs ──────────────────────────────────
+  const consolidatedEwbs = Object.entries(allRecords)
     .filter(([, r]) => r.ewb_status === 'CONSOLIDATED')
     .map(([ewbNo, rec]) => ({ ewbNo, cewb_id: rec.cewb_id }));
 
@@ -57,7 +84,7 @@ export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: 
   const existingCewbs = Object.values(cewbGroups);
 
   // Only ACTIVE EWBs eligible for consolidation
-  const activeEwbs = Object.entries(validatedEwbs)
+  const activeEwbs = Object.entries(allRecords)
     .filter(([, r]) => r.ewb_status === 'ACTIVE')
     .map(([ewbNo, rec]) => ({ ewbNo, rec }));
 
@@ -113,7 +140,7 @@ export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: 
       const data = await res.json();
       if (!res.ok) {
         const d = data.detail;
-        setError(typeof d === 'object' ? (d?.error ?? JSON.stringify(d)) : (d ?? 'Consolidation failed.'));
+        setError(typeof d === 'object' ? (d?.error ?? d?.message ?? 'Consolidation failed.') : (d ?? 'Consolidation failed.'));
         return;
       }
       const cewb = data.data ?? data;
@@ -138,6 +165,17 @@ export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: 
   return (
     <div className="space-y-6 w-full">
 
+      {/* ── DB loading indicator ── */}
+      {dbLoading && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-600">
+          <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          Loading previously validated EWBs from database…
+        </div>
+      )}
+
       {/* ── EWB selection ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -152,8 +190,8 @@ export default function EwbConsolidateTab({ validatedEwbs, vehicleNo, tripNo }: 
 
         {activeEwbs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
-            No active validated EWBs yet.<br />
-            <span className="text-xs">Go to Validate tab first.</span>
+            {dbLoading ? 'Loading EWBs…' : 'No active validated EWBs yet.'}<br />
+            {!dbLoading && <span className="text-xs">Go to Validate tab first.</span>}
           </div>
         ) : (
           <div className="space-y-2">

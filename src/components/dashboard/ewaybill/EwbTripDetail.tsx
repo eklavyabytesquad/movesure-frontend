@@ -334,7 +334,7 @@ export default function EwbTripDetail({ tripId }: { tripId: string }) {
       const data = await res.json();
       if (!res.ok) {
         const d = data.detail;
-        setEwbCache(p => ({ ...p, [ewbNo]: typeof d === 'object' ? (d?.error ?? JSON.stringify(d)) : (d ?? 'Failed') }));
+        setEwbCache(p => ({ ...p, [ewbNo]: typeof d === 'object' ? (d?.error ?? d?.message ?? 'Validation failed.') : (d ?? 'Failed') }));
       } else {
         const rec = data.data ?? data;
         setEwbCache(p => ({ ...p, [ewbNo]: rec }));
@@ -481,6 +481,7 @@ export default function EwbTripDetail({ tripId }: { tripId: string }) {
                 validatedEwbs={validated}
                 vehicleNo={trip.vehicle_info?.vehicle_no}
                 tripNo={trip.trip_sheet_no}
+                challanIds={trip.challans.map(c => c.challan_id)}
               />
             )}
             {activeTab === 'transport' && (

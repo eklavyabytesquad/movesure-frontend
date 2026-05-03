@@ -91,8 +91,11 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
       const res  = await apiFetch(`/v1/ewaybill/validate?eway_bill_number=${digits}`);
       const data = await res.json();
       if (res.ok) {
+        const raw = data.data ?? data;
         const rec = {
-          ...(data.data ?? data),
+          ...raw,
+          eway_bill_number:        ewbNo,
+          ewb_status:              raw.ewb_status ?? data.latest_nic_status ?? '',
           is_previously_validated: data.is_previously_validated,
           total_validations:       data.total_validations,
           latest_validated_at:     data.latest_validated_at,
@@ -102,7 +105,7 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
         onValidated(ewbNo, rec);
       } else {
         const msg = typeof data.detail === 'object'
-          ? (data.detail?.error ?? JSON.stringify(data.detail))
+          ? (data.detail?.error ?? data.detail?.message ?? 'Validation failed.')
           : (data.detail ?? 'Validation failed.');
         setLocalCache(p => ({ ...p, [ewbNo]: msg }));
       }
@@ -125,8 +128,11 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
           const res  = await apiFetch(`/v1/ewaybill/validate?eway_bill_number=${digits}`);
           const data = await res.json();
           if (res.ok) {
+            const raw = data.data ?? data;
             const rec = {
-              ...(data.data ?? data),
+              ...raw,
+              eway_bill_number:        ewbNo,
+              ewb_status:              raw.ewb_status ?? data.latest_nic_status ?? '',
               is_previously_validated: data.is_previously_validated,
               total_validations:       data.total_validations,
               latest_validated_at:     data.latest_validated_at,
@@ -136,7 +142,7 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
             onValidated(ewbNo, rec);
           } else {
             const msg = typeof data.detail === 'object'
-              ? (data.detail?.error ?? JSON.stringify(data.detail))
+              ? (data.detail?.error ?? data.detail?.message ?? 'Validation failed.')
               : (data.detail ?? 'Validation failed.');
             setLocalCache(p => ({ ...p, [ewbNo]: msg }));
           }
@@ -163,12 +169,15 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
       const data = await res.json();
       if (!res.ok) {
         const msg = typeof data.detail === 'object'
-          ? (data.detail?.error ?? JSON.stringify(data.detail))
+          ? (data.detail?.error ?? data.detail?.message ?? 'Validation failed.')
           : (data.detail ?? 'Validation failed.');
         setLocalCache(p => ({ ...p, [ewbNo]: msg }));
       } else {
+        const raw = data.data ?? data;
         const rec = {
-          ...(data.data ?? data),
+          ...raw,
+          eway_bill_number:        ewbNo,
+          ewb_status:              raw.ewb_status ?? data.latest_nic_status ?? '',
           is_previously_validated: data.is_previously_validated,
           total_validations:       data.total_validations,
           latest_validated_at:     data.latest_validated_at,
@@ -284,17 +293,22 @@ export default function EwbValidateTab({ bilties, loading, onValidated, cache }:
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5">
-                        {isValidated && (
+                        {(isValidated || isError) && (
                           <button
                             type="button"
                             onClick={() => revalidate(ewb.ewb_no)}
                             disabled={isLoading}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors border bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 disabled:opacity-50"
-                            title="Re-fetch from NIC"
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors border disabled:opacity-50
+                              ${isError
+                                ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            title={isError ? 'Retry validation' : 'Re-fetch from NIC'}
                           >
                             <svg className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
+                            {isError && <span className="text-[10px] font-semibold">Retry</span>}
                           </button>
                         )}
                         <button
