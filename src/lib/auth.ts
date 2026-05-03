@@ -1,4 +1,5 @@
-export const API_BASE = 'http://xltfp8ewyj0f7a2qro7ihwed.46.202.162.119.sslip.io';
+// Empty string — all /v1/* calls are proxied by Next.js rewrites (avoids CORS)
+export const API_BASE = '';
 
 const KEYS = {
   TOKEN:   'ms_token',

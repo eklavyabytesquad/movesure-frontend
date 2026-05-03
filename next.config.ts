@@ -1,10 +1,20 @@
 import type { NextConfig } from "next";
 import withPWA from "@ducanh2912/next-pwa";
 
+const BACKEND = 'http://xltfp8ewyj0f7a2qro7ihwed.46.202.162.119.sslip.io';
+
 const nextConfig: NextConfig = {
   // Declare Turbopack config so Next.js 16 doesn't error when next-pwa
   // injects its webpack plugin alongside Turbopack.
   turbopack: {},
+  async rewrites() {
+    return [
+      {
+        source: '/v1/:path*',
+        destination: `${BACKEND}/v1/:path*`,
+      },
+    ];
+  },
 };
 
 export default withPWA({
