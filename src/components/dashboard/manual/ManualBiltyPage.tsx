@@ -225,6 +225,44 @@ export default function ManualBiltyPage() {
     setGrError('');
     setSaving(true); setError('');
 
+    // Auto-create new consignor in master if no ID but name provided (online only)
+    let resolvedConsignorId = form.consignor_id;
+    if (!resolvedConsignorId && form.consignor_name.trim() && navigator.onLine) {
+      try {
+        const cr = await apiFetch('/v1/bilty-setting/consignors', {
+          method: 'POST',
+          body: JSON.stringify({
+            consignor_name: form.consignor_name.trim(),
+            ...(form.consignor_gstin  ? { gstin:  form.consignor_gstin  } : {}),
+            ...(form.consignor_mobile ? { mobile: form.consignor_mobile } : {}),
+          }),
+        });
+        if (cr.ok) {
+          const cd = await cr.json();
+          resolvedConsignorId = cd.consignor?.consignor_id ?? cd.consignor_id ?? '';
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    // Auto-create new consignee in master if no ID but name provided (online only)
+    let resolvedConsigneeId = form.consignee_id;
+    if (!resolvedConsigneeId && form.consignee_name.trim() && navigator.onLine) {
+      try {
+        const cr = await apiFetch('/v1/bilty-setting/consignees', {
+          method: 'POST',
+          body: JSON.stringify({
+            consignee_name: form.consignee_name.trim(),
+            ...(form.consignee_gstin  ? { gstin:  form.consignee_gstin  } : {}),
+            ...(form.consignee_mobile ? { mobile: form.consignee_mobile } : {}),
+          }),
+        });
+        if (cr.ok) {
+          const cd = await cr.json();
+          resolvedConsigneeId = cd.consignee?.consignee_id ?? cd.consignee_id ?? '';
+        }
+      } catch { /* non-fatal */ }
+    }
+
     const body: Record<string, unknown> = {
       bilty_type:    'MANUAL',
       gr_no:         form.gr_no.trim(),
@@ -234,11 +272,11 @@ export default function ManualBiltyPage() {
       saving_option: form.saving_option,
     };
 
-    if (form.consignor_id)     body.consignor_id     = form.consignor_id;
+    if (resolvedConsignorId) body.consignor_id     = resolvedConsignorId;
     if (form.consignor_name)   body.consignor_name   = form.consignor_name;
     if (form.consignor_gstin)  body.consignor_gstin  = form.consignor_gstin;
     if (form.consignor_mobile) body.consignor_mobile = form.consignor_mobile;
-    if (form.consignee_id)     body.consignee_id     = form.consignee_id;
+    if (resolvedConsigneeId) body.consignee_id     = resolvedConsigneeId;
     if (form.consignee_name)   body.consignee_name   = form.consignee_name;
     if (form.consignee_gstin)  body.consignee_gstin  = form.consignee_gstin;
     if (form.consignee_mobile) body.consignee_mobile = form.consignee_mobile;
@@ -292,7 +330,10 @@ export default function ManualBiltyPage() {
       const res = await apiFetch(`/v1/bilty/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) {
         const d = await res.json();
-        showToast(d.detail ?? 'Failed to delete.');
+        const msg = Array.isArray(d.detail)
+          ? d.detail.map((e: { msg: string }) => e.msg).join('. ')
+          : (typeof d.detail === 'string' ? d.detail : 'Failed to delete.');
+        showToast(msg);
         return;
       }
       showToast('Bilty deleted.');
