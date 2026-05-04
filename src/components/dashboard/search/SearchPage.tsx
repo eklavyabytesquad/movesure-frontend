@@ -105,12 +105,11 @@ export default function SearchPage() {
     if (f.payment_mode)   params.set('payment_mode', f.payment_mode);
     if (f.from_date)      params.set('from_date', f.from_date);
     if (f.to_date)        params.set('to_date', f.to_date);
-    if (f.from_city_id)   params.set('from_city_id', f.from_city_id);
-    if (f.to_city_id)     params.set('to_city_id', f.to_city_id);
+    // from_city_id / to_city_id not supported by API — filtered client-side
     params.set('limit', String(PAGE_SIZE));
     params.set('offset', String(pg * PAGE_SIZE));
     return params.toString();
-  }, []);
+  }, [])
 
   const doSearch = useCallback(async (pg = 0) => {
     setLoading(true);
@@ -121,21 +120,25 @@ export default function SearchPage() {
       const d: any = await res.json();
       let rows: BiltyResult[] = d.bilties ?? d.data ?? [];
 
-      // Client-side filters for fields not in API
-      const grQ = filters.gr_no.toLowerCase().trim();
-      const cnorQ = filters.consignor.toLowerCase().trim();
-      const cneeQ = filters.consignee.toLowerCase().trim();
-      const ewbQ = filters.ewb_no.trim();
-      const gstinQ = filters.gstin.toLowerCase().trim();
-      const minFrt = filters.min_freight ? Number(filters.min_freight) : null;
-      const maxFrt = filters.max_freight ? Number(filters.max_freight) : null;
-      const dtQ = filters.delivery_type;
+      // Client-side filters for fields not supported by API
+      const grQ      = filters.gr_no.toLowerCase().trim();
+      const cnorQ    = filters.consignor.toLowerCase().trim();
+      const cneeQ    = filters.consignee.toLowerCase().trim();
+      const ewbQ     = filters.ewb_no.trim();
+      const gstinQ   = filters.gstin.toLowerCase().trim();
+      const minAmt   = filters.min_freight ? Number(filters.min_freight) : null;
+      const maxAmt   = filters.max_freight ? Number(filters.max_freight) : null;
+      const dtQ      = filters.delivery_type;
+      const fromCityQ = filters.from_city_id;
+      const toCityQ   = filters.to_city_id;
 
       rows = rows.filter((b) => {
         if (grQ && !b.gr_no.toLowerCase().includes(grQ)) return false;
         if (cnorQ && !(b.consignor_name ?? '').toLowerCase().includes(cnorQ)) return false;
         if (cneeQ && !(b.consignee_name ?? '').toLowerCase().includes(cneeQ)) return false;
         if (dtQ && b.delivery_type !== dtQ) return false;
+        if (fromCityQ && b.from_city_id !== fromCityQ) return false;
+        if (toCityQ   && b.to_city_id   !== toCityQ)   return false;
         if (ewbQ) {
           const ewbs = (b.e_way_bills ?? []).map((e) => e.ewb_no ?? '').join(' ');
           if (!ewbs.includes(ewbQ)) return false;
@@ -144,8 +147,9 @@ export default function SearchPage() {
           const combined = `${b.consignor_gstin ?? ''} ${b.consignee_gstin ?? ''}`.toLowerCase();
           if (!combined.includes(gstinQ)) return false;
         }
-        if (minFrt !== null && (b.freight_amount ?? 0) < minFrt) return false;
-        if (maxFrt !== null && (b.freight_amount ?? 0) > maxFrt) return false;
+        // min/max filter on total_amount (full bilty amount)
+        if (minAmt !== null && (b.total_amount ?? 0) < minAmt) return false;
+        if (maxAmt !== null && (b.total_amount ?? 0) > maxAmt) return false;
         return true;
       });
 
@@ -270,8 +274,8 @@ export default function SearchPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-1 border-t border-slate-100">
               <FilterInput label="E-Way Bill No" placeholder="EWB number…" value={filters.ewb_no} onChange={(v) => setF('ewb_no', v)} />
               <FilterInput label="GSTIN" placeholder="Consignor / consignee GSTIN…" value={filters.gstin} onChange={(v) => setF('gstin', v)} />
-              <FilterInput label="Min Freight (₹)" type="number" placeholder="0" value={filters.min_freight} onChange={(v) => setF('min_freight', v)} />
-              <FilterInput label="Max Freight (₹)" type="number" placeholder="99999" value={filters.max_freight} onChange={(v) => setF('max_freight', v)} />
+              <FilterInput label="Min Amount (₹)" type="number" placeholder="0" value={filters.min_freight} onChange={(v) => setF('min_freight', v)} />
+              <FilterInput label="Max Amount (₹)" type="number" placeholder="99999" value={filters.max_freight} onChange={(v) => setF('max_freight', v)} />
             </div>
           )}
 

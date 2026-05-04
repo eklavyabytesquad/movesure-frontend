@@ -36,13 +36,12 @@ export default function SectionRouteTransport({ form, cities, transports, cityTr
     const entries: CityTransportEntry[] = Array.isArray(raw)
       ? raw.map(r => (typeof r === 'string' ? { transport_id: r } : r as CityTransportEntry))
       : [{ transport_id: raw as unknown as string }];
-    return entries
-      .map(e => {
-        const t = transports.find(t => t.transport_id === e.transport_id);
-        if (!t) return undefined;
-        return { ...t, branchMobile: e.mobile };
-      })
-      .filter((t): t is Transport & { branchMobile?: string } => t !== undefined);
+    const mapped = entries.map(e => {
+      const t = transports.find(t => t.transport_id === e.transport_id);
+      if (!t) return undefined;
+      return { ...t, branchMobile: e.mobile } as Transport & { branchMobile?: string };
+    });
+    return mapped.filter((t): t is Transport & { branchMobile?: string } => t !== undefined);
   }, [form.to_city_id, cityTransportMap, transports]);
 
   const cityItems = cities.map(c => ({ id: c.city_id, label: c.city_name, sub: c.city_code ?? undefined }));
