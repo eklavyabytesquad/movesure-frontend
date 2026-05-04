@@ -15,6 +15,25 @@ export default function SectionConsignor({ form, consignors, sf, selectConsignor
     sub:   c.mobile ?? c.gstin ?? undefined,
   }));
 
+  function handleChange(text: string) {
+    // If a consignor was selected and user starts typing, deselect and start fresh
+    if (form.consignor_id) {
+      sf('consignor_id', '');
+      sf('consignor_gstin', '');
+      sf('consignor_mobile', '');
+    }
+    sf('consignor_name', text);
+    if (!text) return;
+    // Auto-select on exact GSTIN or mobile match
+    const q = text.trim().toLowerCase();
+    const exact = consignors.find(
+      c =>
+        (c.gstin  && c.gstin.toLowerCase()  === q) ||
+        (c.mobile && c.mobile.toLowerCase() === q)
+    );
+    if (exact) selectConsignor(exact.consignor_id ?? exact.id ?? '');
+  }
+
   return (
     <div className="pb-2 border-b border-slate-100">
       <SectionTitle>Consignor (Sender)</SectionTitle>
@@ -24,9 +43,9 @@ export default function SectionConsignor({ form, consignors, sf, selectConsignor
           <TypeaheadInput
             items={items}
             value={form.consignor_name}
-            onChange={text => { sf('consignor_name', text); sf('consignor_id', ''); }}
+            onChange={handleChange}
             onSelect={item => selectConsignor(item.id)}
-            placeholder="Search or enter consignor name"
+            placeholder="Search by name, GSTIN or mobile"
             required
           />
         </div>

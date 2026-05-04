@@ -21,7 +21,7 @@ export default function SectionDiscount({ form, discounts, sf }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <Label>Apply Discount</Label>
-          <select value={form.discount_id} onChange={e => sf('discount_id', e.target.value)} className={INPUT}>
+          <select value={form.discount_id} onChange={e => sf('discount_id', e.target.value)} tabIndex={-1} className={INPUT}>
             <option value="">— No discount —</option>
             {discounts.map(d => (
               <option key={d.id} value={d.id}>

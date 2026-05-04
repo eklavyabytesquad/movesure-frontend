@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { SectionTitle } from '../ui';
+import { SectionTitle, focusNextFormElement } from '../ui';
 import { apiFetch } from '@/lib/api';
 
 interface Props {
@@ -118,6 +118,22 @@ export default function SectionEwb({ ewbNumbers, setEwbNumbers }: Props) {
         <input
           value={pending}
           onChange={e => handleChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === 'Tab') {
+              // If there's a partial EWB (≥4 digits), add it first
+              if (pending.replace(/\D/g, '').length >= 4) {
+                e.preventDefault();
+                handleAddManual();
+              }
+              // Always move to next field (never land on pill buttons)
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              const input = e.currentTarget; // capture before React nullifies it
+              setTimeout(() => focusNextFormElement(input), 0);
+            }
+          }}
           placeholder="1234-5678-9012"
           maxLength={14}
           inputMode="numeric"
@@ -173,7 +189,7 @@ export default function SectionEwb({ ewbNumbers, setEwbNumbers }: Props) {
 
                 {/* Validate tick — visible only when not yet validated */}
                 {!isDone && (
-                  <button type="button" onClick={() => handleValidate(ewb)}
+                  <button type="button" tabIndex={-1} onClick={() => handleValidate(ewb)}
                     className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-green-100 hover:text-green-700 text-current transition-colors"
                     title="Validate EWB">
                     {isLoad ? (
@@ -190,7 +206,7 @@ export default function SectionEwb({ ewbNumbers, setEwbNumbers }: Props) {
                 )}
 
                 {/* Remove */}
-                <button type="button" onClick={() => remove(i)}
+                <button type="button" tabIndex={-1} onClick={() => remove(i)}
                   className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-100 hover:text-red-600 text-current opacity-60 hover:opacity-100 transition-colors leading-none">
                   ×
                 </button>

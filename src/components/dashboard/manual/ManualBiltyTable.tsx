@@ -133,7 +133,7 @@ export default function ManualBiltyTable({
                 <th className="text-right px-5 py-3 font-semibold text-slate-600">Amount</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Payment</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Status</th>
-                <th className="px-5 py-3 w-28"></th>
+                <th className="px-5 py-3 w-36"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -170,7 +170,7 @@ export default function ManualBiltyTable({
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1.5">
                       {canUpdate && (
                         <button
                           onClick={() => onEdit(b)}

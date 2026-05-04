@@ -13,17 +13,18 @@ export default function BiltySearchBar({ recent, loading, onSelect }: Props) {
   const [query,      setQuery]      = useState('');
   const [open,       setOpen]       = useState(false);
   const [hi,         setHi]         = useState(0);
-  const [shownCount, setShownCount] = useState(20);
+  const [shownCount, setShownCount] = useState(10);
   const ref = useRef<HTMLDivElement>(null);
 
   const q = query.toLowerCase().trim();
+  const regularRecent = recent.filter(b => b.bilty_type !== 'MANUAL');
   const results = q.length === 0
-    ? recent.slice(0, shownCount)
-    : recent.filter(b =>
+    ? regularRecent.slice(0, shownCount)
+    : regularRecent.filter(b =>
         b.gr_no.toLowerCase().includes(q) ||
         b.consignor_name.toLowerCase().includes(q) ||
         b.consignee_name.toLowerCase().includes(q)
-      ).slice(0, 20);
+      ).slice(0, 50);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -108,13 +109,13 @@ export default function BiltySearchBar({ recent, loading, onSelect }: Props) {
               </div>
             </button>
           ))}
-          {!q && recent.length > shownCount && (
+          {!q && regularRecent.length > shownCount && (
             <button
               type="button"
-              onMouseDown={e => { e.preventDefault(); setShownCount(n => n + 20); }}
+              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setShownCount(n => n + 10); setOpen(true); }}
               className="w-full text-center px-3 py-2 text-xs text-indigo-600 font-medium hover:bg-indigo-50 border-t border-slate-100 transition-colors"
             >
-              Show more ({recent.length - shownCount} remaining)
+              Load 10 more
             </button>
           )}
         </div>

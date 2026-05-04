@@ -49,7 +49,7 @@ export function useBiltyRecent() {
         return;
       }
 
-      const res = await apiFetch(`/v1/bilty?limit=${LIMIT}&offset=${page * LIMIT}`);
+      const res = await apiFetch(`/v1/bilty?limit=${LIMIT}&offset=${page * LIMIT}&bilty_type=REGULAR`);
       if (!res.ok) return;
 
       const d     = await res.json();

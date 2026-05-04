@@ -12,12 +12,13 @@ interface ChargeRowProps {
   onChange: (v: string) => void;
   bold?: boolean;
   highlight?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 const INPUT_SM = 'w-full border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
 const INPUT_CHARGE = 'w-36 border rounded-md px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400';
 
-function ChargeRow({ label, value, onChange, bold, highlight }: ChargeRowProps) {
+function ChargeRow({ label, value, onChange, bold, highlight, onKeyDown }: ChargeRowProps) {
   return (
     <div className={`flex items-center justify-between gap-1.5 ${bold ? 'border-t border-slate-200 pt-2 mt-1' : ''}`}>
       <span className={`text-xs shrink-0 ${bold ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{label}</span>
@@ -26,6 +27,7 @@ function ChargeRow({ label, value, onChange, bold, highlight }: ChargeRowProps) 
         type="number" min={0} step="0.01"
         value={value}
         onChange={e => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder="0.00"
         className={`${INPUT_CHARGE} ${
           highlight
@@ -89,7 +91,17 @@ export default function SectionCharges({ form, sf }: Props) {
             {isDoor && (
               <ChargeRow label="DD Charge" value={form.dd_charge}      onChange={v => sf('dd_charge', v)} />
             )}
-            <ChargeRow label="TOTAL"       value={form.total_amount}   onChange={v => sf('total_amount', v)} bold highlight />
+            <ChargeRow label="TOTAL"       value={form.total_amount}   onChange={v => sf('total_amount', v)} bold highlight
+              onKeyDown={e => {
+                if (e.key === 'Tab' || e.key === 'Enter') {
+                  e.preventDefault();
+                  if (e.key === 'Enter') e.stopPropagation();
+                  const form = (e.currentTarget as HTMLElement).closest('form');
+                  const saveBtn = form?.querySelector<HTMLElement>('#bilty-save-btn');
+                  saveBtn?.focus();
+                }
+              }}
+            />
           </div>
         </div>
 

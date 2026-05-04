@@ -139,8 +139,8 @@ async function renderCopy(
   // ROW 1: FROM → TO + DATE
   doc.setLineWidth(0.2);
   doc.line(ML, ry + RH1, ML + LEFT_W, ry + RH1);
-  const fromCity = (b.from_city_name ?? '').toUpperCase();
-  const toCity   = (b.to_city_name   ?? '').toUpperCase();
+  const fromCity = (b.from_city_name ?? b.from_city_id ?? '').toUpperCase();
+  const toCity   = (b.to_city_name   ?? b.to_city_id   ?? '').toUpperCase();
   BLD(11); doc.text(fromCity, ML + 2, ry + RH1 * 0.72);
   NRM(7);  doc.text('TO', ML + LEFT_W * 0.36, ry + RH1 * 0.72, { align: 'center' });
   BLD(11); doc.text(toCity, ML + LEFT_W * 0.40, ry + RH1 * 0.72);
@@ -157,14 +157,19 @@ async function renderCopy(
   VAL(8.5);doc.text(b.consignor_name ?? '', ML + 28, ry + RH2 * 0.72, { maxWidth: LEFT_W - 30 });
   ry += RH2;
 
-  // ROW 3: CONSIGNOR GSTIN | MOB
+  // ROW 3: CONSIGNOR GSTIN | MOB — 4 cells: [LBL|VAL|LBL|VAL]
   doc.line(ML, ry + RH3, ML + LEFT_W, ry + RH3);
-  const H3_MID = ML + LEFT_W * 0.50;
-  doc.line(H3_MID, ry, H3_MID, ry + RH3);
-  LBL(5.5); doc.text('GSTIN', ML + 2, ry + 2);
-  VAL(6.5); doc.text(b.consignor_gstin ?? '', ML + 2, ry + RH3 * 0.82, { maxWidth: H3_MID - ML - 3 });
-  LBL(5.5); doc.text('MOB', H3_MID + 1.5, ry + 2);
-  VAL(6.5); doc.text(b.consignor_mobile ?? '', H3_MID + 1.5, ry + RH3 * 0.82, { maxWidth: LEFT_W - (H3_MID - ML) - 4 });
+  const H3_G1 = ML + LEFT_W * 0.14;  // end of GSTIN label cell
+  const H3_G2 = ML + LEFT_W * 0.50;  // end of GSTIN value cell (= mid)
+  const H3_M1 = ML + LEFT_W * 0.64;  // end of MOB label cell
+  doc.line(H3_G1, ry, H3_G1, ry + RH3);
+  doc.line(H3_G2, ry, H3_G2, ry + RH3);
+  doc.line(H3_M1, ry, H3_M1, ry + RH3);
+  const ry3mid = ry + RH3 * 0.72;
+  LBL(5.5); doc.text('GSTIN', ML + 1.5, ry3mid);
+  VAL(6);   doc.text(b.consignor_gstin ?? '', H3_G1 + 1.5, ry3mid, { maxWidth: H3_G2 - H3_G1 - 3 });
+  LBL(5.5); doc.text('MOB', H3_G2 + 1.5, ry3mid);
+  VAL(6);   doc.text(b.consignor_mobile ?? '', H3_M1 + 1.5, ry3mid, { maxWidth: ML + LEFT_W - H3_M1 - 3 });
   ry += RH3;
 
   // ROW 4: CONSIGNEE
@@ -173,63 +178,69 @@ async function renderCopy(
   VAL(8.5);doc.text(b.consignee_name ?? '', ML + 28, ry + RH4 * 0.72, { maxWidth: LEFT_W - 30 });
   ry += RH4;
 
-  // ROW 5: CONSIGNEE GSTIN | MOB
-  const H5_MID = ML + LEFT_W * 0.50;
-  doc.line(H5_MID, ry, H5_MID, ry + RH5);
-  LBL(5.5); doc.text('GSTIN', ML + 2, ry + 2);
-  VAL(6.5); doc.text(b.consignee_gstin ?? '', ML + 2, ry + RH5 * 0.82, { maxWidth: H5_MID - ML - 3 });
-  LBL(5.5); doc.text('MOB', H5_MID + 1.5, ry + 2);
-  VAL(6.5); doc.text(b.consignee_mobile ?? '', H5_MID + 1.5, ry + RH5 * 0.82, { maxWidth: LEFT_W - (H5_MID - ML) - 4 });
+  // ROW 5: CONSIGNEE GSTIN | MOB — 4 cells: [LBL|VAL|LBL|VAL]
+  const H5_G1 = ML + LEFT_W * 0.14;
+  const H5_G2 = ML + LEFT_W * 0.50;
+  const H5_M1 = ML + LEFT_W * 0.64;
+  doc.line(H5_G1, ry, H5_G1, ry + RH5);
+  doc.line(H5_G2, ry, H5_G2, ry + RH5);
+  doc.line(H5_M1, ry, H5_M1, ry + RH5);
+  const ry5mid = ry + RH5 * 0.72;
+  LBL(5.5); doc.text('GSTIN', ML + 1.5, ry5mid);
+  VAL(6);   doc.text(b.consignee_gstin ?? '', H5_G1 + 1.5, ry5mid, { maxWidth: H5_G2 - H5_G1 - 3 });
+  LBL(5.5); doc.text('MOB', H5_G2 + 1.5, ry5mid);
+  VAL(6);   doc.text(b.consignee_mobile ?? '', H5_M1 + 1.5, ry5mid, { maxWidth: ML + LEFT_W - H5_M1 - 3 });
 
   // ── Right column: DELIVERY AT + DELIVERY TYPE + PAYMENT + PVT MARK ──
   const RX    = ML + LEFT_W + 2;
   const RXW   = RIGHT_W - 3;
   const rtTH  = TABLE_H;
   // Stacked sub-rows inside right column
-  const RT1H  = rtTH * 0.38;  // DELIVERY AT (transport)
-  const RT2H  = rtTH * 0.18;  // DELIVERY TYPE
+  const RT1H  = rtTH * 0.45;  // DELIVERY AT (transport) — taller to fit name+GSTIN+MOB
+  const RT2H  = rtTH * 0.19;  // DELIVERY TYPE
   const RT3H  = rtTH * 0.18;  // PAYMENT
   const RT4H  = rtTH - RT1H - RT2H - RT3H; // PVT MARK
 
   let rty = y;
   // DELIVERY AT block
-  LBL(6); doc.text('DELIVERY AT :', RX, rty + 3);
-  BLD(8); doc.text(b.transport_name ?? '', RX, rty + 8, { maxWidth: RXW });
-  NRM(6); if (b.transport_gstin)  doc.text(`GSTIN : ${b.transport_gstin}`,  RX, rty + 13, { maxWidth: RXW });
-  NRM(6); if (b.transport_mobile) doc.text(`MOB : ${b.transport_mobile}`,   RX, rty + 17.5, { maxWidth: RXW });
+  LBL(6);   doc.text('DELIVERY AT :', RX, rty + 3);
+  BLD(6);   doc.text(b.transport_name ?? '', RX, rty + 6.5, { maxWidth: RXW });
+  NRM(5);   if (b.transport_gstin)  doc.text(`GSTIN: ${b.transport_gstin}`,  RX, rty + 9.5,  { maxWidth: RXW });
+  NRM(5);   if (b.transport_mobile) doc.text(`MOB: ${b.transport_mobile}`,   RX, rty + 11.5, { maxWidth: RXW });
   rty += RT1H;
 
   doc.setLineWidth(0.2);
   doc.line(ML + LEFT_W, rty, ML + W, rty);
   // DELIVERY TYPE row
-  LBL(5.5); doc.text('DELIVERY TYPE', RX, rty + 2.5);
+  LBL(7); doc.text('DELIVERY TYPE', RX, rty + 2.5);
   BLD(7);   doc.text(b.delivery_type ?? '', RX + RXW, rty + RT2H * 0.72, { align: 'right' });
   rty += RT2H;
 
   doc.line(ML + LEFT_W, rty, ML + W, rty);
   // PAYMENT row
-  LBL(5.5); doc.text('PAYMENT', RX, rty + 2.5);
+  LBL(7); doc.text('PAYMENT', RX, rty + 2.5);
   BLD(7);   doc.text(b.payment_mode ?? '', RX + RXW, rty + RT3H * 0.72, { align: 'right' });
   rty += RT3H;
 
   doc.line(ML + LEFT_W, rty, ML + W, rty);
   // PVT MARK row
-  LBL(5.5); doc.text('PVT MARK', RX, rty + 2.5);
+  LBL(7); doc.text('PVT MARK', RX, rty + 2.5);
   BLD(7);   doc.text(b.pvt_marks ?? '', RX + RXW, rty + RT4H * 0.72, { align: 'right' });
 
   y += TABLE_H + 1.5;
 
   // ── INVOICE + FREIGHT SECTION ──────────────────────────────────────────
-  // Wider freight column for bigger numbers
-  const INV_W     = W * 0.60;
+  // Invoice wider (74%) for more EWB space; freight narrower (26%)
+  const INV_W     = W * 0.74;
   const FRT_W     = W - INV_W;
   const SEC_HDR_H = 6;
+
+  // Save section start Y — freight container rect drawn after notice to span full height
+  const invFrtY = y;
 
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);
   doc.rect(ML, y, INV_W, SEC_HDR_H, 'S');
   BLD(7.5); doc.text('INVOICE DETAILS', ML + INV_W / 2, y + 4.2, { align: 'center' });
-
-  doc.rect(ML + INV_W, y, FRT_W, SEC_HDR_H, 'S');
   BLD(7.5); doc.text('FREIGHT DETAILS', ML + INV_W + FRT_W / 2, y + 4.2, { align: 'center' });
 
   y += SEC_HDR_H;
@@ -249,25 +260,22 @@ async function renderCopy(
 
   const FRT_ROW_H   = 4.5;
   const frtSectionH = freightRows.length * FRT_ROW_H;
+  const NOTICE_H    = 17;
 
+  const FRT_DIV_X = ML + INV_W + FRT_W * 0.58; // vertical divider between label and value
   freightRows.forEach(([lbl, val], fi) => {
     const rowY  = y + fi * FRT_ROW_H;
     const isBig = lbl === 'TOTAL' || lbl === 'PAID';
     doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
     doc.rect(ML + INV_W, rowY, FRT_W, FRT_ROW_H, 'S');
-    LBL(isBig ? 7 : 6); doc.text(lbl, ML + INV_W + 2, rowY + FRT_ROW_H * 0.72);
-    VAL(isBig ? 8.5 : 7.5); doc.text(String(val ?? ''), ML + INV_W + FRT_W - 1.5, rowY + FRT_ROW_H * 0.72, { align: 'right' });
+    doc.line(FRT_DIV_X, rowY, FRT_DIV_X, rowY + FRT_ROW_H);
+    LBL(isBig ? 6.5 : 5.5); doc.text(lbl, ML + INV_W + 1.5, rowY + FRT_ROW_H * 0.72);
+    VAL(isBig ? 8 : 7); doc.text(String(val ?? ''), ML + INV_W + FRT_W - 1.5, rowY + FRT_ROW_H * 0.72, { align: 'right' });
   });
 
-  // Invoice rows (2)
+  // Invoice rows
   const ewb0      = b.e_way_bills?.[0] ?? b.e_way_bill;
   const INV_ROW_H = 6.5;
-  const invRows   = [
-    { l1: 'INVOICE DATE', v1: b.invoice_date ?? '',   l2: 'INV NO',  v2: b.invoice_no ?? '',    l3: 'CONTENT', v3: b.contain ?? '' },
-    { l1: 'VALUE',        v1: b.invoice_value != null ? `${b.invoice_value}/-` : '',
-                          l2: 'EWB',    v2: ewb0?.ewb_no ?? '',
-                          l3: 'ACT WT', v3: b.actual_weight != null ? `${b.actual_weight} KG` : (b.weight != null ? `${b.weight} KG` : '') },
-  ];
 
   const ic1 = ML + INV_W * 0.24;
   const ic2 = ML + INV_W * 0.45;
@@ -275,30 +283,52 @@ async function renderCopy(
   const ic4 = ML + INV_W * 0.78;
   const ic5 = ML + INV_W * 0.89;
 
-  invRows.forEach((row, ri) => {
-    const rowY = y + ri * INV_ROW_H;
-    doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
-    doc.rect(ML, rowY, INV_W, INV_ROW_H, 'S');
-    [ic1, ic2, ic3, ic4, ic5].forEach(cx => doc.line(cx, rowY, cx, rowY + INV_ROW_H));
-    const mid = rowY + INV_ROW_H * 0.70;
-    LBL(6);   doc.text(row.l1, ML + 1.5, mid);
-    VAL(6.5); doc.text(row.v1, ic1 + 1,  mid, { maxWidth: ic2 - ic1 - 2 });
-    LBL(6);   doc.text(row.l2, ic2 + 1,  mid);
-    VAL(6.5); doc.text(row.v2, ic3 + 1,  mid, { maxWidth: ic4 - ic3 - 2 });
-    LBL(6);   doc.text(row.l3, ic4 + 1,  mid);
-    VAL(6.5); doc.text(row.v3, ML + INV_W - 1.5, mid, { align: 'right', maxWidth: ML + INV_W - ic5 - 2 });
-  });
+  // Row 1: INVOICE DATE | INV NO | CONTENT
+  const row1Y = y;
+  doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
+  doc.rect(ML, row1Y, INV_W, INV_ROW_H, 'S');
+  [ic1, ic2, ic3, ic4, ic5].forEach(cx => doc.line(cx, row1Y, cx, row1Y + INV_ROW_H));
+  const mid1 = row1Y + INV_ROW_H * 0.70;
+  LBL(6);   doc.text('INVOICE DATE', ML + 1.5, mid1);
+  VAL(6.5); doc.text(b.invoice_date ?? '', ic1 + 1, mid1, { maxWidth: ic2 - ic1 - 2 });
+  LBL(6);   doc.text('INV NO',  ic2 + 1, mid1);
+  VAL(6.5); doc.text(b.invoice_no ?? '', ic3 + 1, mid1, { maxWidth: ic4 - ic3 - 2 });
+  LBL(6);   doc.text('CONTENT', ic4 + 1, mid1);
+  VAL(6.5); doc.text(b.contain ?? '', ML + INV_W - 1.5, mid1, { align: 'right', maxWidth: ML + INV_W - ic5 - 2 });
+
+  // Row 2: VALUE | EWB (wide — all EWB numbers) | ACT WT
+  const ewbNos    = (b.e_way_bills ?? []).map(e => e.ewb_no ?? '').filter(s => s.length > 0);
+  if (!ewbNos.length && ewb0?.ewb_no) ewbNos.push(ewb0.ewb_no);
+  const ewbStr    = ewbNos.join(', ');
+  const INV_ROW2_H = 9;
+  const row2Y     = row1Y + INV_ROW_H;
+  const ic4b      = ML + INV_W * 0.80;
+  const ewbLblX   = ic2 + 8.5;
+  doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
+  doc.rect(ML, row2Y, INV_W, INV_ROW2_H, 'S');
+  [ic1, ic2, ewbLblX, ic4b].forEach(cx => doc.line(cx, row2Y, cx, row2Y + INV_ROW2_H));
+  const row2Top   = row2Y + 3.5;
+  LBL(6);   doc.text('VALUE',  ML + 1.5, row2Top);
+  VAL(6.5); doc.text(b.invoice_value != null ? `${b.invoice_value}/-` : '', ic1 + 1, row2Top, { maxWidth: ic2 - ic1 - 2 });
+  LBL(6);   doc.text('EWB', ic2 + 1.5, row2Top);
+  VAL(5.5); doc.text(ewbStr, ewbLblX + 1, row2Top, { maxWidth: ic4b - ewbLblX - 2 });
+  LBL(6);   doc.text('ACT WT', ic4b + 1, row2Top);
+  VAL(6.5); doc.text(
+    b.actual_weight != null ? `${b.actual_weight} KG` : (b.weight != null ? `${b.weight} KG` : ''),
+    ML + INV_W - 1.5, row2Top, { align: 'right', maxWidth: ML + INV_W - ic4b - 2 }
+  );
 
   // Daily Parcel Service
-  const parcelY = y + invRows.length * INV_ROW_H;
-  const parcelH = frtSectionH - invRows.length * INV_ROW_H;
+  const invRowsH = INV_ROW_H + INV_ROW2_H;
+  const parcelY  = y + invRowsH;
+  const parcelH  = frtSectionH - invRowsH;
   if (parcelH > 3) {
     const svc = meta.PARCEL_SERVICE ??
       'KANPUR | LUCKNOW | ALLAHABAD | VARANASI | GORAKHPUR | AZAMGARH | JAUNPUR | BASTI | BALLIA | DEORIA | PRATAPGARH | PHOOLPUR | ALIGARH | BARABANKI | FAIZABAD | SIDHARTH NAGAR | MUBARAKPUR | TAMKUI ROAD | MIRZAPUR | SALEEMBAZAR | HATA | GONDA | BEHRAICH | PANIPAT | PUNJAB | AMRITSAR | JALANDHAR | MALERKOTLA | PHAGWARA | FARIDABAD | AND MORE...';
     doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
     doc.rect(ML, parcelY, INV_W, parcelH, 'S');
-    BLD(6.5); doc.text('DAILY PARCEL SERVICE :', ML + INV_W / 2, parcelY + 4, { align: 'center' });
-    NRM(5.5); doc.text(svc, ML + 2, parcelY + 8, { maxWidth: INV_W - 4 });
+    BLD(8); doc.text('DAILY PARCEL SERVICE :', ML + INV_W / 2, parcelY + 4, { align: 'center' });
+    NRM(7); doc.text(svc, ML + 2, parcelY + 8.5, { maxWidth: INV_W - 4 });
   }
 
   y += frtSectionH + 1.5;
@@ -310,10 +340,17 @@ async function renderCopy(
     '3. All goods are carried strictly on "Said To Contain" basis',
   ];
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);
-  doc.rect(ML, y, W, 17, 'S');
-  BLD(7); doc.text('NOTICE', ML + W / 2, y + 5, { align: 'center' });
-  NRM(6); notices.forEach((n, ni) => doc.text(n, ML + 2, y + 9 + ni * 3.5, { maxWidth: W - 4 }));
-  y += 18;
+  doc.rect(ML, y, INV_W, NOTICE_H, 'S');
+  BLD(7); doc.text('NOTICE', ML + INV_W / 2, y + 5, { align: 'center' });
+  NRM(6); notices.forEach((n, ni) => doc.text(n, ML + 2, y + 9 + ni * 3.5, { maxWidth: INV_W - 4 }));
+
+  // ONE big freight container rect: header(6) + rows(frtSectionH) + gap(1.5) + notice(NOTICE_H)
+  // Drawn last so its outer border overlays row borders cleanly
+  const totalFrtH = SEC_HDR_H + frtSectionH + 1.5 + NOTICE_H;
+  doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);
+  doc.rect(ML + INV_W, invFrtY, FRT_W, totalFrtH, 'S');
+
+  y += NOTICE_H + 1;
 
   // ── FOOTER ─────────────────────────────────────────────────────────────
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);

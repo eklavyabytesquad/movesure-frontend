@@ -1,21 +1,15 @@
-'use client';
+﻿'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { City, Consignor, Consignee, Transport, ManualBilty, ManualForm, VisFlags } from './types';
-import SearchableSelect from './SearchableSelect';
+import { TypeaheadInput, TypeaheadItem, focusNextFormElement } from '@/components/dashboard/bilty/ui';
+import ModalPartyRow        from './ModalPartyRow';
+import ModalRouteSection    from './ModalRouteSection';
+import ModalShipmentSection from './ModalShipmentSection';
 
-const CLS = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white transition-colors';
-const LABEL = 'block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide';
-
-function SectionHeader({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      {icon && <span className="text-slate-400">{icon}</span>}
-      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{children}</span>
-      <div className="flex-1 h-px bg-slate-100" />
-    </div>
-  );
-}
+const CLS   = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white transition-colors';
+const LABEL = 'block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wide';
+const SEC   = 'text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100';
 
 interface Props {
   open: boolean;
@@ -26,10 +20,13 @@ interface Props {
   consignors: Consignor[];
   consignees: Consignee[];
   transports: Transport[];
+  cityTransportMap: Record<string, { transport_id: string; mobile?: string }[]>;
   editItem: ManualBilty | null;
   saving: boolean;
   error: string;
   grError: string;
+  ewbNumbers: string[];
+  setEwbNumbers: (v: string[]) => void;
   onChange: (k: keyof ManualForm, v: string) => void;
   onChangeMulti: (patch: Partial<ManualForm>) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -37,414 +34,323 @@ interface Props {
 }
 
 export default function ManualBiltyModal({
-  open, onClose, form, vis, cities, consignors, consignees, transports,
-  editItem, saving, error, grError,
+  open, onClose, form, vis, cities, consignors, consignees, transports, cityTransportMap,
+  editItem, saving, error, grError, ewbNumbers, setEwbNumbers,
   onChange, onChangeMulti, onSubmit, onClearError,
 }: Props) {
 
-  // Close on Escape key
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
+
+  // ── Display-text state for all typeahead fields ────────────────────────────
+  const [fromCityText,  setFromCityText]  = useState('');
+  const [toCityText,    setToCityText]    = useState('');
+  const [transportText, setTransportText] = useState('');
+  const [consignorText, setConsignorText] = useState('');
+  const [consigneeText, setConsigneeText] = useState('');
+
+  useEffect(() => {
+    setFromCityText(cities.find(c => c.city_id === form.from_city_id)?.city_name ?? '');
+  }, [form.from_city_id, cities]);
+
+  useEffect(() => {
+    setToCityText(cities.find(c => c.city_id === form.to_city_id)?.city_name ?? '');
+  }, [form.to_city_id, cities]);
+
+  useEffect(() => {
+    setTransportText(
+      transports.find(t => t.transport_id === form.transport_id)?.transport_name ??
+      form.transport_name ?? ''
+    );
+  }, [form.transport_id, form.transport_name, transports]);
+
+  useEffect(() => {
+    setConsignorText(
+      form.consignor_id
+        ? (consignors.find(c => (c.consignor_id ?? c.id) === form.consignor_id)?.consignor_name ?? form.consignor_name)
+        : form.consignor_name
+    );
+  }, [form.consignor_id, form.consignor_name, consignors]);
+
+  useEffect(() => {
+    setConsigneeText(
+      form.consignee_id
+        ? (consignees.find(c => (c.consignee_id ?? c.id) === form.consignee_id)?.consignee_name ?? form.consignee_name)
+        : form.consignee_name
+    );
+  }, [form.consignee_id, form.consignee_name, consignees]);
+
+  // ── TypeaheadItem lists ────────────────────────────────────────────────────
+  const cityItems = useMemo<TypeaheadItem[]>(
+    () => cities.map(c => ({ id: c.city_id, label: c.city_name, sub: c.city_code ?? undefined })),
+    [cities]
+  );
+  const consignorItems = useMemo<TypeaheadItem[]>(
+    () => consignors.map(c => ({
+      id: c.consignor_id ?? c.id ?? '', label: c.consignor_name,
+      sub: c.mobile ?? c.gstin ?? undefined,
+    })),
+    [consignors]
+  );
+  const consigneeItems = useMemo<TypeaheadItem[]>(
+    () => consignees.map(c => ({
+      id: c.consignee_id ?? c.id ?? '', label: c.consignee_name,
+      sub: c.mobile ?? c.gstin ?? undefined,
+    })),
+    [consignees]
+  );
+
+  // ── Consignor ──────────────────────────────────────────────────────────────
+  function handleConsignorChange(text: string) {
+    if (form.consignor_id) onChangeMulti({ consignor_id: '', consignor_gstin: '', consignor_mobile: '' });
+    setConsignorText(text);
+    onChange('consignor_name', text);
+    if (!text) return;
+    const q = text.trim().toLowerCase();
+    const exact = consignors.find(
+      c => (c.gstin && c.gstin.toLowerCase() === q) || (c.mobile && c.mobile.toLowerCase() === q)
+    );
+    if (exact) handleConsignorSelect({ id: exact.consignor_id ?? exact.id ?? '', label: exact.consignor_name });
+  }
+  function handleConsignorSelect(item: TypeaheadItem) {
+    const c = consignors.find(c => (c.consignor_id ?? c.id) === item.id);
+    onChangeMulti({ consignor_id: item.id, consignor_name: item.label, consignor_gstin: c?.gstin ?? '', consignor_mobile: c?.mobile ?? '' });
+    setConsignorText(item.label);
+  }
+
+  // ── Consignee ──────────────────────────────────────────────────────────────
+  function handleConsigneeChange(text: string) {
+    if (form.consignee_id) onChangeMulti({ consignee_id: '', consignee_gstin: '', consignee_mobile: '' });
+    setConsigneeText(text);
+    onChange('consignee_name', text);
+    if (!text) return;
+    const q = text.trim().toLowerCase();
+    const exact = consignees.find(
+      c => (c.gstin && c.gstin.toLowerCase() === q) || (c.mobile && c.mobile.toLowerCase() === q)
+    );
+    if (exact) handleConsigneeSelect({ id: exact.consignee_id ?? exact.id ?? '', label: exact.consignee_name });
+  }
+  function handleConsigneeSelect(item: TypeaheadItem) {
+    const c = consignees.find(c => (c.consignee_id ?? c.id) === item.id);
+    onChangeMulti({ consignee_id: item.id, consignee_name: item.label, consignee_gstin: c?.gstin ?? '', consignee_mobile: c?.mobile ?? '' });
+    setConsigneeText(item.label);
+  }
+
+  // ── Escape → close ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;
 
+  // ── Form-level Enter → advance focus ──────────────────────────────────────
+  function handleFormKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
+    if (
+      e.key === 'Enter' &&
+      !e.defaultPrevented &&
+      (e.target as HTMLElement).tagName !== 'TEXTAREA' &&
+      (e.target as HTMLElement).tagName !== 'BUTTON'
+    ) {
+      e.preventDefault();
+      focusNextFormElement(e.target as HTMLElement);
+    }
+  }
+
+  // ── From-city handler (outside tab flow) ──────────────────────────────────
+  function handleFromCityChange(text: string) {
+    setFromCityText(text);
+    if (!text) { onChange('from_city_id', ''); return; }
+    const exact = cities.find(
+      c => (c.city_code && c.city_code.toLowerCase() === text.trim().toLowerCase()) ||
+           c.city_name.toLowerCase() === text.trim().toLowerCase()
+    );
+    if (exact) { onChange('from_city_id', exact.city_id); setFromCityText(exact.city_name); }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50">
       <div className="absolute inset-0" onClick={onClose} />
 
-      {/* Modal panel */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-275 flex flex-col" style={{ maxHeight: '96vh' }}>
 
         {/* ── Header ── */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between shrink-0">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900">
               {editItem ? `Edit Bilty — ${editItem.gr_no}` : 'Create Manual Bilty'}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {editItem
-                ? 'Update the details below and click Update Bilty'
-                : 'Fill in the shipment details to create a manual bilty'}
+            <p className="text-xs text-slate-400">
+              {editItem ? 'Update the details below' : 'Fill in the shipment details'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors text-xl leading-none shrink-0 mt-0.5"
-          >
+          <button type="button" onClick={onClose} tabIndex={-1}
+            className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors text-lg leading-none">
             ×
           </button>
         </div>
 
+        {/* ── Secondary bar: Bilty Date + From City (rarely changed, outside tab flow) ── */}
+        <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bilty Date</span>
+            <input type="date" value={form.bilty_date} tabIndex={-1}
+              onChange={e => onChange('bilty_date', e.target.value)}
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">From City</span>
+            <div className="w-52">
+              <TypeaheadInput
+                items={cityItems}
+                value={fromCityText}
+                onChange={handleFromCityChange}
+                onSelect={item => { onChange('from_city_id', item.id); setFromCityText(item.label); }}
+                placeholder="Name or code…"
+              />
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-300 italic hidden lg:inline">Rarely changed — not in Tab flow</span>
+        </div>
+
         {/* ── Error banner ── */}
         {error && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 shrink-0">
+          <div className="mx-5 mt-3 flex items-center justify-between gap-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 shrink-0">
             <span>{error}</span>
-            <button onClick={onClearError} className="text-red-400 hover:text-red-600 text-base shrink-0">×</button>
+            <button onClick={onClearError} tabIndex={-1} className="text-red-400 hover:text-red-600 shrink-0">×</button>
           </div>
         )}
 
-        {/* ── Scrollable body ── */}
-        <form id="manual-bilty-form" onSubmit={onSubmit} className="flex-1 overflow-y-auto px-6 py-6 space-y-7">
+        {/* ── Body ── */}
+        <form
+          id="manual-bilty-form"
+          onSubmit={onSubmit}
+          onKeyDown={handleFormKeyDown}
+          className="flex-1 overflow-hidden"
+        >
+          <div className="flex gap-0 h-full">
 
-          {/* Section 1: GR & Date */}
-          <div>
-            <SectionHeader>GR & Date</SectionHeader>
-            <div className="grid grid-cols-2 gap-4">
+            {/* ─── LEFT COLUMN ─── */}
+            <div className="flex-1 px-5 py-4 space-y-4 border-r border-slate-100 overflow-y-auto">
+
+              {/* GR Number */}
               <div>
-                <label className={LABEL}>GR Number *</label>
+                <p className={SEC}>GR Number</p>
+                <label className={LABEL}>GR No. *</label>
                 <input
-                  type="text"
-                  value={form.gr_no}
+                  type="text" value={form.gr_no} required maxLength={50}
                   onChange={e => onChange('gr_no', e.target.value)}
                   placeholder="e.g. 1234 or SB/25/001"
-                  maxLength={50}
-                  required
                   className={`${CLS} ${grError ? 'border-red-400 focus:ring-red-400 bg-red-50' : ''}`}
                 />
-                {grError && <p className="mt-1.5 text-xs text-red-600">{grError}</p>}
+                {grError && <p className="mt-1 text-xs text-red-600">{grError}</p>}
               </div>
-              <div>
-                <label className={LABEL}>Bilty Date *</label>
-                <input
-                  type="date"
-                  value={form.bilty_date}
-                  onChange={e => onChange('bilty_date', e.target.value)}
-                  required
-                  className={CLS}
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Section 2: Route & Options */}
-          <div>
-            <SectionHeader>Route & Shipment Options</SectionHeader>
-            <div className="grid grid-cols-3 gap-4">
+              {/* Destination & Transport */}
               <div>
-                <label className={LABEL}>From City</label>
-                <SearchableSelect
-                  items={cities}
-                  value={form.from_city_id}
-                  onChange={id => onChange('from_city_id', id)}
-                  labelKey="city_name"
-                  valueKey="city_id"
-                  placeholder="From city"
-                  emptyLabel="— None —"
+                <p className={SEC}>Destination &amp; Transport</p>
+                <ModalRouteSection
+                  form={form}
+                  cities={cities}
+                  transports={transports}
+                  cityTransportMap={cityTransportMap}
+                  toCityText={toCityText}
+                  transportText={transportText}
+                  onToCityTextChange={setToCityText}
+                  onToCitySelect={(item: TypeaheadItem) => { onChange('to_city_id', item.id); setToCityText(item.label); }}
+                  onTransportTextChange={setTransportText}
+                  onTransportSelect={(item: TypeaheadItem) => { onChangeMulti({ transport_id: item.id, transport_name: item.label }); setTransportText(item.label); }}
+                  onChange={onChange}
+                  onChangeMulti={onChangeMulti}
                 />
               </div>
-              <div>
-                <label className={LABEL}>To City</label>
-                <SearchableSelect
-                  items={cities}
-                  value={form.to_city_id}
-                  onChange={id => onChange('to_city_id', id)}
-                  labelKey="city_name"
-                  valueKey="city_id"
-                  placeholder="To city"
-                  emptyLabel="— None —"
-                />
-              </div>
-              <div>
-                <label className={LABEL}>Transporter</label>
-                <SearchableSelect
-                  items={transports}
-                  value={form.transport_id}
-                  onChange={(id, item) => onChangeMulti({ transport_id: id, transport_name: item?.transport_name ?? '' })}
-                  labelKey="transport_name"
-                  valueKey="transport_id"
-                  placeholder="— Transporter —"
-                  emptyLabel="— None —"
-                />
-              </div>
-              <div>
-                <label className={LABEL}>Payment Mode</label>
-                <select value={form.payment_mode} onChange={e => onChange('payment_mode', e.target.value)} className={CLS}>
-                  <option value="TO-PAY">TO-PAY</option>
-                  <option value="PAID">PAID</option>
-                  <option value="FOC">FOC</option>
-                </select>
-              </div>
-              <div>
-                <label className={LABEL}>Delivery Type</label>
-                <select value={form.delivery_type} onChange={e => onChange('delivery_type', e.target.value)} className={CLS}>
-                  <option value="DOOR">DOOR</option>
-                  <option value="GODOWN">GODOWN</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Consignor & Consignee */}
-          <div>
-            <SectionHeader>Parties</SectionHeader>
-            <div className="grid grid-cols-2 gap-6">
 
               {/* Consignor */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-violet-700 bg-violet-50 border border-violet-100 px-2.5 py-1 rounded-lg">
-                    Consignor — Sender
-                  </span>
-                </div>
-                <SearchableSelect
-                  items={consignors}
-                  value={form.consignor_id}
-                  onChange={(id, item) => onChangeMulti({
-                    consignor_id: id,
-                    consignor_name:   item?.consignor_name ?? '',
-                    consignor_gstin:  item?.gstin ?? '',
-                    consignor_mobile: item?.mobile ?? '',
-                  })}
-                  labelKey="consignor_name"
-                  valueKey="consignor_id"
-                  placeholder="Search consignor…"
-                  emptyLabel="— None —"
+              <div>
+                <p className={SEC}>Consignor — Sender</p>
+                <ModalPartyRow
+                  title="Consignor — Sender"
+                  badgeClass="text-violet-700 bg-violet-50 border-violet-100"
+                  items={consignorItems}
+                  text={consignorText}
+                  onTextChange={handleConsignorChange}
+                  onSelect={handleConsignorSelect}
+                  gstin={form.consignor_gstin}
+                  onGstinChange={v => onChange('consignor_gstin', v)}
+                  mobile={form.consignor_mobile}
+                  onMobileChange={v => onChange('consignor_mobile', v)}
                 />
-                {!form.consignor_id && (
-                  <input
-                    type="text"
-                    value={form.consignor_name}
-                    onChange={e => onChange('consignor_name', e.target.value)}
-                    placeholder="Or type name manually"
-                    className={CLS}
-                  />
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={LABEL}>GSTIN</label>
-                    <input type="text" value={form.consignor_gstin} onChange={e => onChange('consignor_gstin', e.target.value)} maxLength={15} placeholder="15-digit GSTIN" className={CLS} />
-                  </div>
-                  <div>
-                    <label className={LABEL}>Mobile</label>
-                    <input type="text" value={form.consignor_mobile} onChange={e => onChange('consignor_mobile', e.target.value)} placeholder="Mobile no." className={CLS} />
-                  </div>
-                </div>
               </div>
 
               {/* Consignee */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
-                    Consignee — Receiver
-                  </span>
-                </div>
-                <SearchableSelect
-                  items={consignees}
-                  value={form.consignee_id}
-                  onChange={(id, item) => onChangeMulti({
-                    consignee_id: id,
-                    consignee_name:   item?.consignee_name ?? '',
-                    consignee_gstin:  item?.gstin ?? '',
-                    consignee_mobile: item?.mobile ?? '',
-                  })}
-                  labelKey="consignee_name"
-                  valueKey="consignee_id"
-                  placeholder="Search consignee…"
-                  emptyLabel="— None —"
-                />
-                {!form.consignee_id && (
-                  <input
-                    type="text"
-                    value={form.consignee_name}
-                    onChange={e => onChange('consignee_name', e.target.value)}
-                    placeholder="Or type name manually"
-                    className={CLS}
-                  />
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={LABEL}>GSTIN</label>
-                    <input type="text" value={form.consignee_gstin} onChange={e => onChange('consignee_gstin', e.target.value)} maxLength={15} placeholder="15-digit GSTIN" className={CLS} />
-                  </div>
-                  <div>
-                    <label className={LABEL}>Mobile</label>
-                    <input type="text" value={form.consignee_mobile} onChange={e => onChange('consignee_mobile', e.target.value)} placeholder="Mobile no." className={CLS} />
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Section 4: Shipment Details */}
-          <div>
-            <SectionHeader>Shipment Details</SectionHeader>
-            <div className="grid grid-cols-4 gap-4">
               <div>
-                <label className={LABEL}>Packages</label>
-                <input type="number" min={0} value={form.no_of_pkg} onChange={e => onChange('no_of_pkg', e.target.value)} placeholder="0" className={CLS} />
-              </div>
-              <div>
-                <label className={LABEL}>Weight (kg)</label>
-                <input type="number" min={0} step="0.01" value={form.weight} onChange={e => onChange('weight', e.target.value)} placeholder="0.00" className={CLS} />
-              </div>
-
-              {vis.show_contain && (
-                <div className="col-span-2">
-                  <label className={LABEL}>Contain / Goods</label>
-                  <input type="text" value={form.contain} onChange={e => onChange('contain', e.target.value)} placeholder="e.g. Clothes, Electronics" className={CLS} />
-                </div>
-              )}
-
-              {vis.show_pvt_marks && (
-                <div className="col-span-2">
-                  <label className={LABEL}>Pvt Marks</label>
-                  <input type="text" value={form.pvt_marks} onChange={e => onChange('pvt_marks', e.target.value)} className={CLS} />
-                </div>
-              )}
-
-              {vis.show_invoice && (
-                <>
-                  <div className="col-span-2">
-                    <label className={LABEL}>Invoice No.</label>
-                    <input type="text" value={form.invoice_no} onChange={e => onChange('invoice_no', e.target.value)} className={CLS} />
-                  </div>
-                  <div className="col-span-2">
-                    <label className={LABEL}>Invoice Value (₹)</label>
-                    <input type="number" min={0} step="0.01" value={form.invoice_value} onChange={e => onChange('invoice_value', e.target.value)} placeholder="0.00" className={CLS} />
-                  </div>
-                </>
-              )}
-
-              {vis.show_eway_bill && (
-                <div className="col-span-2">
-                  <label className={LABEL}>E-Way Bill No.</label>
-                  <input type="text" value={form.ewb_no} onChange={e => onChange('ewb_no', e.target.value)} placeholder="EWB number" className={CLS} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section 5: Charges */}
-          <div>
-            <SectionHeader>Charges (₹)</SectionHeader>
-            {vis.show_itemized_charges ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-4 gap-3">
-                  {([
-                    ['freight_amount', 'Freight'],
-                    ['labour_charge',  'Labour'],
-                    ['bill_charge',    'Bill'],
-                    ['toll_charge',    'Toll'],
-                    ['dd_charge',      'DD'],
-                    ['pf_charge',      'PF'],
-                    ['local_charge',   'Local'],
-                    ['other_charge',   'Other'],
-                  ] as [keyof ManualForm, string][]).map(([k, lbl]) => (
-                    <div key={k}>
-                      <label className={LABEL}>{lbl}</label>
-                      <input
-                        type="number" min={0} step="0.01"
-                        value={String(form[k])}
-                        onChange={e => onChange(k, e.target.value)}
-                        placeholder="0.00"
-                        className={CLS}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-3 border-t border-slate-100">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Total Amount (₹) — auto-calculated</label>
-                  <input
-                    type="number" min={0} step="0.01"
-                    value={form.total_amount}
-                    onChange={e => onChange('total_amount', e.target.value)}
-                    placeholder="0.00"
-                    className="w-full max-w-xs border-2 border-green-300 rounded-lg px-3 py-2.5 text-sm font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 bg-green-50 transition-colors"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-xs">
-                <label className="block text-sm font-bold text-slate-700 mb-2">Total Amount (₹)</label>
-                <input
-                  type="number" min={0} step="0.01"
-                  value={form.total_amount}
-                  onChange={e => onChange('total_amount', e.target.value)}
-                  placeholder="0.00"
-                  className="w-full border-2 border-green-300 rounded-lg px-3 py-2.5 text-sm font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 bg-green-50 transition-colors"
+                <p className={SEC}>Consignee — Receiver</p>
+                <ModalPartyRow
+                  title="Consignee — Receiver"
+                  badgeClass="text-blue-700 bg-blue-50 border-blue-100"
+                  items={consigneeItems}
+                  text={consigneeText}
+                  onTextChange={handleConsigneeChange}
+                  onSelect={handleConsigneeSelect}
+                  gstin={form.consignee_gstin}
+                  onGstinChange={v => onChange('consignee_gstin', v)}
+                  mobile={form.consignee_mobile}
+                  onMobileChange={v => onChange('consignee_mobile', v)}
                 />
               </div>
-            )}
-          </div>
 
-          {/* Section 6: Remark */}
-          <div>
-            <SectionHeader>Additional Notes</SectionHeader>
-            <div>
-              <label className={LABEL}>Remark</label>
-              <textarea
-                rows={2}
-                value={form.remark}
-                onChange={e => onChange('remark', e.target.value)}
-                placeholder="Optional remarks…"
-                className={`${CLS} resize-none`}
+            </div>{/* end LEFT */}
+
+            {/* ─── RIGHT COLUMN ─── */}
+            <div className="w-95 shrink-0 px-5 py-4 overflow-y-auto">
+              <ModalShipmentSection
+                form={form}
+                vis={vis}
+                ewbNumbers={ewbNumbers}
+                setEwbNumbers={setEwbNumbers}
+                onChange={onChange}
+                onTotalNext={() => saveBtnRef.current?.focus()}
               />
             </div>
-          </div>
 
+          </div>
         </form>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 rounded-b-2xl flex items-center justify-between gap-4 shrink-0">
-          {/* Save mode */}
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 rounded-b-2xl flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-4">
             <span className="text-xs font-semibold text-slate-500">Save as:</span>
             <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-              <input
-                type="radio"
-                name="modal_saving_option"
-                value="SAVE"
-                checked={form.saving_option === 'SAVE'}
-                onChange={() => onChange('saving_option', 'SAVE')}
-                className="accent-violet-600"
-              />
+              <input type="radio" name="modal_saving_option" value="SAVE" tabIndex={-1}
+                checked={form.saving_option === 'SAVE'} onChange={() => onChange('saving_option', 'SAVE')}
+                className="accent-violet-600" />
               Saved
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-              <input
-                type="radio"
-                name="modal_saving_option"
-                value="DRAFT"
-                checked={form.saving_option === 'DRAFT'}
-                onChange={() => onChange('saving_option', 'DRAFT')}
-                className="accent-violet-600"
-              />
+              <input type="radio" name="modal_saving_option" value="DRAFT" tabIndex={-1}
+                checked={form.saving_option === 'DRAFT'} onChange={() => onChange('saving_option', 'DRAFT')}
+                className="accent-violet-600" />
               Draft
             </label>
           </div>
-
-          {/* Actions */}
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors"
-            >
+            <button type="button" onClick={onClose} tabIndex={-1}
+              className="px-4 py-1.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
               Cancel
             </button>
             <button
-              type="submit"
-              form="manual-bilty-form"
-              disabled={saving}
-              className="px-6 py-2 text-sm font-bold text-white bg-violet-600 rounded-xl hover:bg-violet-700 disabled:opacity-60 transition-colors flex items-center gap-2 min-w-32 justify-center"
-            >
-              {saving && (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-              )}
-              {saving
-                ? 'Saving…'
-                : editItem
-                  ? 'Update Bilty'
-                  : form.saving_option === 'DRAFT'
-                    ? 'Save as Draft'
-                    : 'Create Bilty'}
+              ref={saveBtnRef}
+              type="submit" form="manual-bilty-form" disabled={saving}
+              onKeyDown={e => {
+                if (e.key === 'Tab' || e.key === 'Enter') {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLButtonElement).click();
+                }
+              }}
+              className="px-5 py-1.5 text-sm font-bold text-white bg-violet-600 rounded-xl hover:bg-violet-700 disabled:opacity-60 transition-colors flex items-center gap-2 min-w-32 justify-center">
+              {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />}
+              {saving ? 'Saving…' : editItem ? 'Update Bilty' : form.saving_option === 'DRAFT' ? 'Save as Draft' : 'Create Bilty'}
             </button>
           </div>
         </div>

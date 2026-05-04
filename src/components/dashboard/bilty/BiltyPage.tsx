@@ -26,7 +26,7 @@ import {
   BLANK, BiltyForm,
   Book, City, PrimaryTemplate,
 } from './types';
-import { PdfPreviewModal } from './ui';
+import { PdfPreviewModal, focusNextFormElement } from './ui';
 import BiltySearchBar        from './ui/BiltySearchBar';
 import EwbValidateModal       from './ui/EwbValidateModal';
 import SectionGrBook         from './sections/SectionGrBook';
@@ -168,8 +168,13 @@ export default function BiltyPage() {
   }
 
   function handleToCitySelect(cityId: string) {
-    const tpId = cityTransportMap[cityId];
-    if (tpId) selectTransport(tpId);
+    const entries = cityTransportMap[cityId];
+    if (entries && entries.length > 0) {
+      const first = entries[0];
+      selectTransport(first.transport_id);
+      // Use branch_mobile from city-transport link if master transport has no mobile
+      if (first.mobile) setForm(p => ({ ...p, transport_mobile: first.mobile! }));
+    }
   }
 
   // ── Print (offline-safe) ──────────────────────────────────────────────────
@@ -203,6 +208,16 @@ export default function BiltyPage() {
       if (!b) {
         setSaveError('Cannot load bilty for printing — open it online first to cache it.');
         return;
+      }
+
+      // Resolve city names from local master if API only returned IDs
+      if (b.from_city_id && !b.from_city_name) {
+        const cityObj = cities.find((c: City) => c.city_id === b!.from_city_id);
+        if (cityObj) b = { ...b, from_city_name: cityObj.city_name };
+      }
+      if (b.to_city_id && !b.to_city_name) {
+        const cityObj = cities.find((c: City) => c.city_id === b!.to_city_id);
+        if (cityObj) b = { ...b, to_city_name: cityObj.city_name };
       }
 
       // Resolve template: state -> IDB cache -> API
@@ -364,6 +379,45 @@ export default function BiltyPage() {
 
     try {
       const validEwbs = ewbNumbers.filter(n => n.trim());
+
+      // Auto-create new consignor if no ID but name provided (online only)
+      let consignorId = form.consignor_id;
+      if (!consignorId && form.consignor_name.trim() && navigator.onLine) {
+        try {
+          const cr = await apiFetch('/v1/bilty-setting/consignors', {
+            method: 'POST',
+            body: JSON.stringify({
+              consignor_name: form.consignor_name.trim(),
+              ...(form.consignor_gstin  ? { gstin:  form.consignor_gstin  } : {}),
+              ...(form.consignor_mobile ? { mobile: form.consignor_mobile } : {}),
+            }),
+          });
+          if (cr.ok) {
+            const cd = await cr.json();
+            consignorId = cd.consignor?.consignor_id ?? cd.consignor_id ?? '';
+          }
+        } catch { /* non-fatal — bilty saves without ID */ }
+      }
+
+      // Auto-create new consignee if no ID but name provided (online only)
+      let consigneeId = form.consignee_id;
+      if (!consigneeId && form.consignee_name.trim() && navigator.onLine) {
+        try {
+          const cr = await apiFetch('/v1/bilty-setting/consignees', {
+            method: 'POST',
+            body: JSON.stringify({
+              consignee_name: form.consignee_name.trim(),
+              ...(form.consignee_gstin  ? { gstin:  form.consignee_gstin  } : {}),
+              ...(form.consignee_mobile ? { mobile: form.consignee_mobile } : {}),
+            }),
+          });
+          if (cr.ok) {
+            const cd = await cr.json();
+            consigneeId = cd.consignee?.consignee_id ?? cd.consignee_id ?? '';
+          }
+        } catch { /* non-fatal */ }
+      }
+
       const body: Record<string, unknown> = {
         bilty_type:     'REGULAR',
         bilty_date:     form.bilty_date || new Date().toISOString().split('T')[0],
@@ -374,10 +428,10 @@ export default function BiltyPage() {
         saving_option:  form.saving_option || 'SAVE',
         status:         'SAVED',
       };
-      if (form.consignor_id)     body.consignor_id      = form.consignor_id;
+      if (consignorId)           body.consignor_id      = consignorId;
       if (form.consignor_gstin)  body.consignor_gstin   = form.consignor_gstin;
       if (form.consignor_mobile) body.consignor_mobile  = form.consignor_mobile;
-      if (form.consignee_id)     body.consignee_id      = form.consignee_id;
+      if (consigneeId)           body.consignee_id      = consigneeId;
       if (form.consignee_gstin)  body.consignee_gstin   = form.consignee_gstin;
       if (form.consignee_mobile) body.consignee_mobile  = form.consignee_mobile;
       if (form.transport_id)     body.transport_id      = form.transport_id;
@@ -507,16 +561,6 @@ export default function BiltyPage() {
               </button>
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setShowEwbValidate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Validate EWB
-          </button>
           <BiltySearchBar recent={recent} loading={recentLoading} onSelect={id => loadForEdit(id)} />
         </div>
       </div>
@@ -552,12 +596,23 @@ export default function BiltyPage() {
         <div className="py-20 text-center text-sm text-slate-400">Loading...</div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
-          <form onSubmit={handleSave} className="space-y-2">
+          <form onSubmit={handleSave} className="space-y-2"
+            onKeyDown={(e) => {
+              // Enter on any plain input (not handled by TypeaheadInput via stopPropagation)
+              // moves focus to the next element; on the last element it reaches the save button
+              if (e.key !== 'Enter' || e.defaultPrevented) return;
+              const target = e.target as HTMLElement;
+              if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
+                e.preventDefault();
+                focusNextFormElement(target);
+              }
+            }}
+          >
             <SectionGrBook
               form={form} primaryBook={primaryBook} noPrimaryBook={noPrimaryBook}
               grPreview={grPreview} editBiltyId={editBiltyId} sf={sf} cities={cities}
             />
-            <SectionRouteTransport form={form} cities={cities} transports={transports} sf={sf} selectTransport={selectTransport} onToCitySelect={handleToCitySelect} />
+            <SectionRouteTransport form={form} cities={cities} transports={transports} cityTransportMap={cityTransportMap} sf={sf} selectTransport={selectTransport} onToCitySelect={handleToCitySelect} />
             <SectionConsignor form={form} consignors={consignors} sf={sf} selectConsignor={selectConsignor} />
             <SectionConsignee form={form} consignees={consignees} sf={sf} selectConsignee={selectConsignee} />
             <SectionShipment form={form} sf={sf} />

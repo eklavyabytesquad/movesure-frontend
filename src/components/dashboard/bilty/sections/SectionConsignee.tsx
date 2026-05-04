@@ -15,6 +15,25 @@ export default function SectionConsignee({ form, consignees, sf, selectConsignee
     sub:   c.mobile ?? c.gstin ?? undefined,
   }));
 
+  function handleChange(text: string) {
+    // If a consignee was selected and user starts typing, deselect and start fresh
+    if (form.consignee_id) {
+      sf('consignee_id', '');
+      sf('consignee_gstin', '');
+      sf('consignee_mobile', '');
+    }
+    sf('consignee_name', text);
+    if (!text) return;
+    // Auto-select on exact GSTIN or mobile match
+    const q = text.trim().toLowerCase();
+    const exact = consignees.find(
+      c =>
+        (c.gstin  && c.gstin.toLowerCase()  === q) ||
+        (c.mobile && c.mobile.toLowerCase() === q)
+    );
+    if (exact) selectConsignee(exact.consignee_id ?? exact.id ?? '');
+  }
+
   return (
     <div className="pb-2 border-b border-slate-100">
       <SectionTitle>Consignee (Receiver)</SectionTitle>
@@ -24,9 +43,9 @@ export default function SectionConsignee({ form, consignees, sf, selectConsignee
           <TypeaheadInput
             items={items}
             value={form.consignee_name}
-            onChange={text => { sf('consignee_name', text); sf('consignee_id', ''); }}
+            onChange={handleChange}
             onSelect={item => selectConsignee(item.id)}
-            placeholder="Search or enter consignee name"
+            placeholder="Search by name, GSTIN or mobile"
           />
         </div>
         <div>

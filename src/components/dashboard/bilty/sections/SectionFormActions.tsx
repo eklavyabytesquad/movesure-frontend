@@ -28,6 +28,7 @@ export default function SectionFormActions({
         <div className="flex items-center gap-2">
           <label className="text-xs text-slate-600">Save as:</label>
           <select
+            tabIndex={-1}
             value={form.saving_option}
             onChange={e => sf('saving_option', e.target.value)}
             className="border border-slate-300 rounded-md px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -39,7 +40,7 @@ export default function SectionFormActions({
         </div>
         <div className="flex gap-2">
           {onPrint && (
-            <button type="button" onClick={onPrint} disabled={printing || saving}
+            <button id="bilty-print-btn" type="button" onClick={onPrint} disabled={printing || saving}
               className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -48,11 +49,17 @@ export default function SectionFormActions({
               {printing ? 'Printing…' : 'Print'}
             </button>
           )}
-          <button type="button" onClick={onReset}
+          <button type="button" tabIndex={-1} onClick={onReset}
             className="px-3 py-1 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             Reset
           </button>
-          <button type="submit" disabled={saving}
+          <button id="bilty-save-btn" type="submit" disabled={saving}
+            onKeyDown={e => {
+              if (e.key === 'Tab') {
+                e.preventDefault();
+                (e.currentTarget as HTMLButtonElement).click();
+              }
+            }}
             className="px-5 py-1 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors">
             {saving ? 'Saving…' : editBiltyId ? 'Update Bilty' : 'Save Bilty'}
           </button>

@@ -15,6 +15,7 @@ const navLinks = [
   { href: '/dashboard/manual',    label: 'Manual'     },
   { href: '/dashboard/challan',   label: 'Challan'    },
   { href: '/dashboard/ewaybill',  label: 'E-Way Bill' },
+  { href: '/dashboard/search',    label: 'Search'     },
   { href: '/dashboard/settings',  label: 'Settings'   },
 ];
 
@@ -46,6 +47,7 @@ export default function DashboardNavbar() {
     if (link.href === '/dashboard/manual')    return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
     if (link.href === '/dashboard/challan')   return can(SLUGS.CHALLAN_READ) || can(SLUGS.CHALLAN_CREATE);
     if (link.href === '/dashboard/ewaybill')  return can(SLUGS.BILTY_READ) || can(SLUGS.CHALLAN_READ);
+    if (link.href === '/dashboard/search')    return can(SLUGS.BILTY_READ) || can(SLUGS.BILTY_CREATE);
     return true;
   });
 

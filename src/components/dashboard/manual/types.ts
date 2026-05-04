@@ -1,4 +1,4 @@
-export interface City { city_id: string; city_name: string; }
+export interface City { city_id: string; city_name: string; city_code?: string | null; }
 export interface Consignor { consignor_id?: string; id?: string; consignor_name: string; gstin?: string | null; mobile?: string | null; }
 export interface Consignee { consignee_id?: string; id?: string; consignee_name: string; gstin?: string | null; mobile?: string | null; }
 export interface Transport { transport_id: string; transport_name: string; gstin?: string | null; mobile?: string | null; }

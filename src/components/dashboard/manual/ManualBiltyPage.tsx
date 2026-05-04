@@ -11,7 +11,6 @@ import {
 } from './types';
 import ManualBiltyModal from './ManualBiltyModal';
 import ManualBiltyTable from './ManualBiltyTable';
-import EwbValidateModal from '@/components/dashboard/bilty/ui/EwbValidateModal';
 
 export default function ManualBiltyPage() {
   const { can } = usePermissions();
@@ -20,11 +19,12 @@ export default function ManualBiltyPage() {
   const canDelete = can(SLUGS.BILTY_DELETE);
 
   // ── Master data ────────────────────────────────────────────────────────────
-  const [cities,     setCities]     = useState<City[]>([]);
-  const [consignors, setConsignors] = useState<Consignor[]>([]);
-  const [consignees, setConsignees] = useState<Consignee[]>([]);
-  const [transports, setTransports] = useState<Transport[]>([]);
-  const [cityMap,    setCityMap]    = useState<Record<string, string>>({});
+  const [cities,           setCities]           = useState<City[]>([]);
+  const [consignors,       setConsignors]       = useState<Consignor[]>([]);
+  const [consignees,       setConsignees]       = useState<Consignee[]>([]);
+  const [transports,       setTransports]       = useState<Transport[]>([]);
+  const [cityMap,          setCityMap]          = useState<Record<string, string>>({});
+  const [cityTransportMap, setCityTransportMap] = useState<Record<string, { transport_id: string; mobile?: string }[]>>({});
 
   // ── Book defaults / visibility ─────────────────────────────────────────────
   const [vis, setVis] = useState<VisFlags>({
@@ -48,22 +48,24 @@ export default function ManualBiltyPage() {
   const [showModal,  setShowModal]  = useState(false);
   const [editItem,   setEditItem]   = useState<ManualBilty | null>(null);
   const [form,       setForm]       = useState<ManualForm>({ ...BLANK_FORM });
+  const [ewbNumbers, setEwbNumbers] = useState<string[]>([]);
   const [saving,     setSaving]     = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error,      setError]      = useState('');
   const [grError,    setGrError]    = useState('');
   const [toast,      setToast]      = useState('');
-  const [showEwbValidate, setShowEwbValidate] = useState(false);
+
 
   // ── Load master ────────────────────────────────────────────────────────────
   const loadMaster = useCallback(async () => {
-    const [cityRes, crRes, ceRes, tpRes, bookRes, booksListRes] = await Promise.all([
+    const [cityRes, crRes, ceRes, tpRes, bookRes, booksListRes, ctRes] = await Promise.all([
       apiFetch('/v1/master/cities?is_active=true'),
       apiFetch('/v1/bilty-setting/consignors'),
       apiFetch('/v1/bilty-setting/consignees'),
       apiFetch('/v1/master/transports?is_active=true'),
       apiFetch('/v1/bilty-setting/books/primary?bilty_type=MANUAL'),
       apiFetch('/v1/bilty-setting/books?bilty_type=MANUAL'),
+      apiFetch('/v1/master/city-transports'),
     ]);
 
     if (cityRes.ok) {
@@ -78,6 +80,19 @@ export default function ManualBiltyPage() {
     if (ceRes.ok)        { const d = await ceRes.json();        setConsignees(d.consignees ?? d ?? []); }
     if (tpRes.ok)        { const d = await tpRes.json();        setTransports(d.transports ?? d ?? []); }
     if (booksListRes.ok) { const d = await booksListRes.json(); setManualBooks(d.books ?? d ?? []); }
+    if (ctRes.ok) {
+      const d = await ctRes.json();
+      const links: { city_id: string; transport_id: string; branch_mobile?: { mobile: string }[] }[] =
+        d.city_transports ?? d.links ?? [];
+      const ctMap: Record<string, { transport_id: string; mobile?: string }[]> = {};
+      links.forEach(l => {
+        if (!ctMap[l.city_id]) ctMap[l.city_id] = [];
+        const mobile = Array.isArray(l.branch_mobile) && l.branch_mobile.length > 0
+          ? l.branch_mobile[0].mobile : undefined;
+        ctMap[l.city_id].push({ transport_id: l.transport_id, mobile });
+      });
+      setCityTransportMap(ctMap);
+    }
 
     if (bookRes.ok) {
       const d = await bookRes.json();
@@ -149,6 +164,7 @@ export default function ManualBiltyPage() {
   function openCreate() {
     setEditItem(null);
     setForm({ ...BLANK_FORM, bilty_date: new Date().toISOString().split('T')[0], ...defaultFormPatch });
+    setEwbNumbers([]);
     setError(''); setGrError('');
     setShowModal(true);
   }
@@ -235,6 +251,9 @@ export default function ManualBiltyPage() {
     if (form.invoice_value)    body.invoice_value    = Number(form.invoice_value);
     if (form.pvt_marks)        body.pvt_marks        = form.pvt_marks;
     if (form.ewb_no)           body.ewb_no           = form.ewb_no;
+    const validEwbs = ewbNumbers.filter(n => n.trim());
+    if (validEwbs.length > 0)  body.ewb_no           = validEwbs[0];
+    if (validEwbs.length > 1)  body.e_way_bills      = validEwbs.map(ewb_no => ({ ewb_no }));
     if (form.no_of_pkg)        body.no_of_pkg        = Number(form.no_of_pkg);
     if (form.weight)           body.weight           = Number(form.weight);
     if (form.remark)           body.remark           = form.remark;
@@ -288,8 +307,6 @@ export default function ManualBiltyPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col w-full h-full overflow-hidden bg-slate-50">
-      {showEwbValidate && <EwbValidateModal onClose={() => setShowEwbValidate(false)} />}
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-4 shrink-0 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -337,16 +354,6 @@ export default function ManualBiltyPage() {
             Create Manual Bilty
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setShowEwbValidate(true)}
-          className="shrink-0 flex items-center gap-1.5 rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Validate EWB
-        </button>
       </div>
 
       {/* Table */}
@@ -378,10 +385,13 @@ export default function ManualBiltyPage() {
         consignors={consignors}
         consignees={consignees}
         transports={transports}
+        cityTransportMap={cityTransportMap}
         editItem={editItem}
         saving={saving}
         error={error}
         grError={grError}
+        ewbNumbers={ewbNumbers}
+        setEwbNumbers={setEwbNumbers}
         onChange={sf}
         onChangeMulti={sfMulti}
         onSubmit={handleSubmit}

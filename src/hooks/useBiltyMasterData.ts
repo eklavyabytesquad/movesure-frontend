@@ -52,7 +52,7 @@ export function useBiltyMasterData({ onBookLoaded }: UseBiltyMasterDataOptions =
   const [cities,           setCities]            = useState<City[]>([]);
   const [transports,       setTransports]        = useState<Transport[]>([]);
   const [discounts,        setDiscounts]         = useState<BiltyDiscount[]>([]);
-  const [cityTransportMap, setCityTransportMap]  = useState<Record<string, string>>({});
+  const [cityTransportMap, setCityTransportMap]  = useState<Record<string, { transport_id: string; mobile?: string }[]>>({});
   const [dropLoading,      setDropLoading]       = useState(true);
 
   // Keep onBookLoaded stable across renders without re-triggering useEffect
@@ -73,11 +73,17 @@ export function useBiltyMasterData({ onBookLoaded }: UseBiltyMasterDataOptions =
       setPrimaryTemplate((tplData as { template?: PrimaryTemplate })?.template ?? tplData as unknown as PrimaryTemplate);
     }
 
-    const ctLinks: { city_id: string; transport_id: string }[] =
-      (ctData as { city_transports?: { city_id: string; transport_id: string }[] })?.city_transports ??
-      (ctData as { links?: { city_id: string; transport_id: string }[] })?.links ?? [];
-    const ctMap: Record<string, string> = {};
-    ctLinks.forEach(l => { if (!ctMap[l.city_id]) ctMap[l.city_id] = l.transport_id; });
+    const ctLinks: { city_id: string; transport_id: string; branch_mobile?: { label: string; mobile: string }[] }[] =
+      (ctData as { city_transports?: { city_id: string; transport_id: string; branch_mobile?: { label: string; mobile: string }[] }[] })?.city_transports ??
+      (ctData as { links?: { city_id: string; transport_id: string; branch_mobile?: { label: string; mobile: string }[] }[] })?.links ?? [];
+    const ctMap: Record<string, { transport_id: string; mobile?: string }[]> = {};
+    ctLinks.forEach(l => {
+      if (!ctMap[l.city_id]) ctMap[l.city_id] = [];
+      const mobile = Array.isArray(l.branch_mobile) && l.branch_mobile.length > 0
+        ? l.branch_mobile[0].mobile
+        : undefined;
+      ctMap[l.city_id].push({ transport_id: l.transport_id, mobile });
+    });
     setCityTransportMap(ctMap);
 
     if (bookData && isNot404) {
@@ -179,7 +185,8 @@ export function useBiltyMasterData({ onBookLoaded }: UseBiltyMasterDataOptions =
 
   return {
     primaryBook, primaryTemplate, noPrimaryBook,
-    consignors, consignees, cities, transports, discounts, cityTransportMap,
+    consignors, consignees, cities, transports, discounts,
+    cityTransportMap,
     dropLoading, refreshPrimaryBook,
   };
 }

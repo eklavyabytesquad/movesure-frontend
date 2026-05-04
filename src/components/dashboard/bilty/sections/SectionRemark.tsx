@@ -11,6 +11,7 @@ export default function SectionRemark({ form, sf }: Props) {
     <div className="pb-1">
       <SectionTitle>Remark</SectionTitle>
       <textarea
+        tabIndex={-1}
         value={form.remark}
         onChange={e => sf('remark', e.target.value)}
         rows={1}

@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { BiltyForm } from '../types';
-import { INPUT, SectionTitle, Label } from '../ui';
+import { INPUT, SectionTitle, Label, DateInput } from '../ui';
 
 interface Props {
   form: BiltyForm;
@@ -7,6 +8,14 @@ interface Props {
 }
 
 export default function SectionInvoice({ form, sf }: Props) {
+  // Auto-set invoice date to today if blank
+  useEffect(() => {
+    if (!form.invoice_date) {
+      sf('invoice_date', new Date().toISOString().split('T')[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="pb-2 border-b border-slate-100">
       <SectionTitle>Invoice</SectionTitle>
@@ -23,8 +32,7 @@ export default function SectionInvoice({ form, sf }: Props) {
         </div>
         <div>
           <Label>Invoice Date</Label>
-          <input type="date" value={form.invoice_date}
-            onChange={e => sf('invoice_date', e.target.value)} className={INPUT} />
+          <DateInput value={form.invoice_date} onChange={v => sf('invoice_date', v)} />
         </div>
       </div>
     </div>
