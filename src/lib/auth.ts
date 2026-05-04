@@ -1,4 +1,4 @@
-export const API_BASE = 'https://main.movesure.io';
+export const API_BASE = 'http://localhost:8000';
 
 const KEYS = {
   TOKEN:   'ms_token',

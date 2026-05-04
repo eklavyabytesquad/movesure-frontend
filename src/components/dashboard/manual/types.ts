@@ -60,8 +60,17 @@ export interface BookDefaults {
 export interface ManualBook {
   book_id: string;
   book_name: string | null;
+  bilty_type: string;
+  prefix: string | null;
+  postfix: string | null;
+  digits: number;
+  current_number: number;
+  from_number: number;
+  to_number: number;
   is_primary: boolean;
   is_active: boolean;
+  branch_id?: string | null;
+  branch_name?: string | null;
   book_defaults?: BookDefaults | null;
 }
 
@@ -75,6 +84,7 @@ export interface VisFlags {
 
 export const BLANK_FORM = {
   gr_no:            '',
+  book_id:          '',
   bilty_date:       new Date().toISOString().split('T')[0],
   consignor_id:     '',
   consignor_name:   '',

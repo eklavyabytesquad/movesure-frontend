@@ -9,11 +9,12 @@ import { SLUGS } from '@/lib/permissions';
 import { FormInput, SearchableDropdown, SubmitButton, ActionButton } from '../ui';
 import type { DropdownOption } from '../ui';
 
-interface Branch { branch_id: string; name: string; }
+interface Branch { branch_id: string; name: string; branch_code: string; }
 
 interface ChallanBook {
   book_id: string;
   book_name: string;
+  branch_id: string | null;
   route_scope: 'OPEN' | 'FIXED_ROUTE';
   prefix: string | null;
   from_number: number;
@@ -29,6 +30,7 @@ interface ChallanBook {
 
 const DEFAULT_FORM = {
   book_name: '',
+  branch_id: '',
   route_scope: 'OPEN' as 'OPEN' | 'FIXED_ROUTE',
   prefix: '',
   from_number: '1',
@@ -56,19 +58,23 @@ export default function ChallanBooks() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError]           = useState('');
   const [success, setSuccess]       = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const booksEndpoint = filterBranch
+        ? `/v1/challan/book?branch_id=${filterBranch}`
+        : `/v1/challan/book/all`;
       const [booksRes, branchRes] = await Promise.all([
-        apiFetch(`/v1/challan/book`),
+        apiFetch(booksEndpoint),
         apiFetch(`/v1/master/branches?is_active=true`),
       ]);
       if (booksRes.ok)  { const d = await booksRes.json();  setBooks(d.books ?? d ?? []); }
       if (branchRes.ok) { const d = await branchRes.json(); setBranches(d.branches ?? d ?? []); }
     } finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filterBranch]);
 
   useEffect(() => {
     if (!getUser()) { router.replace('/auth/login'); return; }
@@ -86,6 +92,7 @@ export default function ChallanBooks() {
     setEditItem(b);
     setForm({
       book_name:      b.book_name,
+      branch_id:      b.branch_id ?? '',
       route_scope:    b.route_scope,
       prefix:         b.prefix ?? '',
       from_number:    String(b.from_number),
@@ -112,6 +119,7 @@ export default function ChallanBooks() {
         is_primary:  form.is_primary,
       };
       if (form.prefix) body.prefix = form.prefix;
+      if (form.branch_id) body.branch_id = form.branch_id;
       if (form.route_scope === 'FIXED_ROUTE') {
         if (form.from_branch_id) body.from_branch_id = form.from_branch_id;
         if (form.to_branch_id)   body.to_branch_id   = form.to_branch_id;
@@ -152,7 +160,7 @@ export default function ChallanBooks() {
     load();
   }
 
-  const branchOptions: DropdownOption[] = branches.map(b => ({ value: b.branch_id, label: b.name }));
+  const branchOptions: DropdownOption[] = branches.map(b => ({ value: b.branch_id, label: `${b.name} (${b.branch_code})` }));
 
   return (
     <div>
@@ -166,11 +174,20 @@ export default function ChallanBooks() {
       {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
       {canCreate && (
-        <div className="mb-5">
+        <div className="mb-5 flex items-center gap-3">
           <button onClick={openCreate}
             className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
             + New Book
           </button>
+          {branches.length > 0 && (
+            <select
+              value={filterBranch}
+              onChange={e => setFilterBranch(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+              <option value="">All Branches</option>
+              {branches.map(b => <option key={b.branch_id} value={b.branch_id}>{b.name} ({b.branch_code})</option>)}
+            </select>
+          )}
         </div>
       )}
 
@@ -185,6 +202,14 @@ export default function ChallanBooks() {
               value={form.book_name}
               onChange={e => setForm(p => ({ ...p, book_name: e.target.value }))}
               placeholder="FY25-26 Batch A"
+            />
+            <SearchableDropdown
+              label={`Branch${!editItem ? ' *' : ''}`}
+              required={!editItem}
+              value={form.branch_id}
+              onChange={val => setForm(p => ({ ...p, branch_id: val }))}
+              options={branchOptions}
+              placeholder="Select branch"
             />
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1.5">Route Scope</label>
@@ -277,6 +302,7 @@ export default function ChallanBooks() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3 text-left">Book Name</th>
+                <th className="px-4 py-3 text-left">Branch</th>
                 <th className="px-4 py-3 text-left">Scope</th>
                 <th className="px-4 py-3 text-left">Range</th>
                 <th className="px-4 py-3 text-left">Current</th>
@@ -293,6 +319,9 @@ export default function ChallanBooks() {
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded-full">PRIMARY</span>
                     )}
                     {b.prefix && <span className="ml-1 text-xs text-gray-400 font-mono">{b.prefix}{'*'.repeat(b.digits ?? 4)}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {b.branch_id ? (branches.find(br => br.branch_id === b.branch_id)?.name ?? <span className="font-mono text-gray-300">{b.branch_id.slice(0,8)}…</span>) : <span className="text-gray-300 italic">—</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-600 text-xs">{b.route_scope.replace('_', ' ')}</td>
                   <td className="px-4 py-3 text-gray-600">{b.from_number} – {b.to_number}</td>

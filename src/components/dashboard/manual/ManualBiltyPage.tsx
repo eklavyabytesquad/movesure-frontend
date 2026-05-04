@@ -64,7 +64,7 @@ export default function ManualBiltyPage() {
       apiFetch('/v1/bilty-setting/consignees'),
       apiFetch('/v1/master/transports?is_active=true'),
       apiFetch('/v1/bilty-setting/books/primary?bilty_type=MANUAL'),
-      apiFetch('/v1/bilty-setting/books?bilty_type=MANUAL'),
+      apiFetch('/v1/bilty-setting/books/all?bilty_type=MANUAL'),
       apiFetch('/v1/master/city-transports'),
     ]);
 
@@ -169,10 +169,31 @@ export default function ManualBiltyPage() {
     setShowModal(true);
   }
 
+  // Peek next GR for a book (non-destructive — counter only advances on POST)
+  async function fetchNextGr(bookId: string) {
+    try {
+      const res = await apiFetch(`/v1/bilty/peek-gr/${bookId}`);
+      if (!res.ok) { showToast('Could not preview GR number.'); return; }
+      const d = await res.json();
+      if (d.is_exhausted) {
+        showToast('This book is exhausted. Please select another book.');
+        setForm(f => ({ ...f, gr_no: '', book_id: bookId }));
+        setGrError('Book exhausted');
+        return;
+      }
+      setGrError('');
+      // has_series → auto-fill; no series → clear so user types freely
+      setForm(f => ({ ...f, gr_no: (d.has_series && d.gr_no) ? d.gr_no : '', book_id: bookId }));
+    } catch {
+      showToast('Unable to reach the server.');
+    }
+  }
+
   function openEdit(b: ManualBilty) {
     setEditItem(b);
     setForm({
       gr_no:            b.gr_no ?? '',
+      book_id:          '',
       bilty_date:       b.bilty_date ?? new Date().toISOString().split('T')[0],
       consignor_id:     b.consignor_id    ?? '',
       consignor_name:   b.consignor_name  ?? '',
@@ -272,7 +293,8 @@ export default function ManualBiltyPage() {
       saving_option: form.saving_option,
     };
 
-    if (resolvedConsignorId) body.consignor_id     = resolvedConsignorId;
+    if (form.book_id)          body.book_id          = form.book_id;
+    if (resolvedConsignorId)   body.consignor_id     = resolvedConsignorId;
     if (form.consignor_name)   body.consignor_name   = form.consignor_name;
     if (form.consignor_gstin)  body.consignor_gstin  = form.consignor_gstin;
     if (form.consignor_mobile) body.consignor_mobile = form.consignor_mobile;
@@ -426,6 +448,7 @@ export default function ManualBiltyPage() {
         consignors={consignors}
         consignees={consignees}
         transports={transports}
+        manualBooks={manualBooks}
         cityTransportMap={cityTransportMap}
         editItem={editItem}
         saving={saving}
@@ -437,6 +460,7 @@ export default function ManualBiltyPage() {
         onChangeMulti={sfMulti}
         onSubmit={handleSubmit}
         onClearError={() => setError('')}
+        onFetchNextGr={fetchNextGr}
       />
 
       {/* Toast */}

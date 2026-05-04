@@ -15,6 +15,7 @@ interface BiltyBook {
   template_name: string | null;
   bilty_type: 'REGULAR' | 'MANUAL';
   party_scope: 'COMMON' | 'CONSIGNOR' | 'CONSIGNEE';
+  branch_id: string | null;
   consignor_id: string | null;
   consignee_id: string | null;
   prefix: string | null;
@@ -50,6 +51,7 @@ const DEFAULT_FORM = {
   template_name: '',
   bilty_type: 'REGULAR' as 'REGULAR' | 'MANUAL',
   party_scope: 'COMMON' as 'COMMON' | 'CONSIGNOR' | 'CONSIGNEE',
+  branch_id: '',
   consignor_id: '',
   consignee_id: '',
   prefix: '',
@@ -92,45 +94,58 @@ export default function BiltyBooks() {
   const [error, setError]                 = useState('');
   const [success, setSuccess]             = useState('');
   const [filterType, setFilterType]       = useState('');
+  const [filterBranch, setFilterBranch]   = useState('');
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [consignorsList, setConsignorsList] = useState<{ id: string; consignor_name: string }[]>([]);
   const [consigneesList, setConsigneesList] = useState<{ id: string; consignee_name: string }[]>([]);
   const [citiesList, setCitiesList]         = useState<{ city_id: string; city_name: string }[]>([]);
   const [transportsList, setTransportsList] = useState<{ transport_id: string; transport_name: string }[]>([]);
+  const [branchesList, setBranchesList]     = useState<{ branch_id: string; name: string; branch_code: string }[]>([]);
 
   async function fetchParties() {
-    const [crs, ces, cityRes, tpRes] = await Promise.all([
+    const [crs, ces, cityRes, tpRes, brRes] = await Promise.all([
       apiFetch(`/v1/bilty-setting/consignors`),
       apiFetch(`/v1/bilty-setting/consignees`),
       apiFetch(`/v1/master/cities?is_active=true`),
       apiFetch(`/v1/master/transports?is_active=true`),
+      apiFetch(`/v1/master/branches`),
     ]);
-    if (crs.ok)     { const d = await crs.json();     setConsignorsList(d.consignors ?? d ?? []); }
-    if (ces.ok)     { const d = await ces.json();     setConsigneesList(d.consignees ?? d ?? []); }
+    if (crs.ok)   { const d = await crs.json();   setConsignorsList(d.consignors ?? d ?? []); }
+    if (ces.ok)   { const d = await ces.json();   setConsigneesList(d.consignees ?? d ?? []); }
     if (cityRes.ok) { const d = await cityRes.json(); setCitiesList(d.cities ?? d ?? []); }
     if (tpRes.ok)   { const d = await tpRes.json();   setTransportsList(d.transports ?? d ?? []); }
+    if (brRes.ok)   { const d = await brRes.json(); setBranchesList(d.branches ?? d ?? []); }
   }
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filterType) params.set('bilty_type', filterType);
     try {
-      const res = await apiFetch(`/v1/bilty-setting/books?${params}`);
+      const params = new URLSearchParams();
+      if (filterType)   params.set('bilty_type', filterType);
+      if (filterBranch) params.set('branch_id', filterBranch);
+      const endpoint = filterBranch
+        ? `/v1/bilty-setting/books?${params}`
+        : `/v1/bilty-setting/books/all?${params}`;
+      const res = await apiFetch(endpoint);
       if (res.status === 401) { router.replace('/auth/login'); return; }
       const data = await res.json();
       setBooks(data.books ?? data ?? []);
     } catch { setError('Failed to load bilty books.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterType]);
+  }, [filterType, filterBranch]);
 
   useEffect(() => {
     if (!getUser()) { router.replace('/auth/login'); return; }
     fetchBooks();
     fetchParties();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchBooks, router]);
+  }, []);
+
+  useEffect(() => {
+    fetchBooks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchBooks]);
 
   function resetForm() {
     setEditItem(null);
@@ -146,6 +161,7 @@ export default function BiltyBooks() {
       template_name:    b.template_name ?? '',
       bilty_type:       b.bilty_type,
       party_scope:      b.party_scope,
+      branch_id:        b.branch_id ?? '',
       consignor_id:     b.consignor_id ?? '',
       consignee_id:     b.consignee_id ?? '',
       prefix:           b.prefix ?? '',
@@ -196,7 +212,7 @@ export default function BiltyBooks() {
     const hasAnyDefault = Object.values(bd).some(v => v !== null && v !== false);
 
     if (editItem) {
-      // PATCH — only send editable fields (number range is immutable)
+      // PATCH — send editable fields; MANUAL series is mutable, REGULAR range is immutable
       const body: Record<string, unknown> = {
         is_fixed:      form.is_fixed,
         auto_continue: form.auto_continue,
@@ -206,6 +222,18 @@ export default function BiltyBooks() {
       if (form.template_name.trim()) body.template_name = form.template_name.trim();
       if (form.prefix.trim())        body.prefix        = form.prefix.trim();
       if (form.postfix.trim())       body.postfix       = form.postfix.trim();
+      if (form.branch_id)            body.branch_id     = form.branch_id;
+      // MANUAL books allow updating / setting the optional series on edit
+      if (editItem.bilty_type === 'MANUAL') {
+        if (form.from_number && form.to_number) {
+          body.from_number = Number(form.from_number);
+          body.to_number   = Number(form.to_number);
+          body.digits      = Number(form.digits) || 4;
+        } else {
+          body.from_number = null;
+          body.to_number   = null;
+        }
+      }
       try {
         const res = await apiFetch(`/v1/bilty-setting/books/${editItem.book_id}`, {
           method: 'PATCH',
@@ -237,11 +265,17 @@ export default function BiltyBooks() {
       body.from_number = Number(form.from_number);
       body.to_number   = Number(form.to_number);
       body.digits      = Number(form.digits);
+    } else if (form.from_number && form.to_number) {
+      // Optional number series for MANUAL books
+      body.from_number = Number(form.from_number);
+      body.to_number   = Number(form.to_number);
+      body.digits      = Number(form.digits) || 4;
     }
     if (form.book_name.trim())     body.book_name     = form.book_name.trim();
     if (form.template_name.trim()) body.template_name = form.template_name.trim();
     if (form.prefix.trim())        body.prefix        = form.prefix.trim();
     if (form.postfix.trim())       body.postfix       = form.postfix.trim();
+    if (form.branch_id)            body.branch_id     = form.branch_id;
     if (form.party_scope === 'CONSIGNOR' && form.consignor_id) body.consignor_id = form.consignor_id;
     if (form.party_scope === 'CONSIGNEE' && form.consignee_id) body.consignee_id = form.consignee_id;
     if (hasAnyDefault) body.book_defaults = bd;
@@ -313,13 +347,14 @@ export default function BiltyBooks() {
       {success && <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
       {/* Filter */}
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         {(['', 'REGULAR', 'MANUAL'] as const).map(t => (
           <button key={t} type="button" onClick={() => setFilterType(t)}
             className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${filterType === t ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             {t || 'All'}
           </button>
         ))}
+
       </div>
 
       {/* Create / Edit form */}
@@ -334,7 +369,7 @@ export default function BiltyBooks() {
           </div>
           {form.bilty_type === 'MANUAL' && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800">
-              <strong>MANUAL book</strong> — No number series required. This book's <em>Book Defaults</em> will be pre-filled on the Manual Bilty creation form. Mark it as Primary after saving.
+              <strong>MANUAL book</strong> — Number series is <em>optional</em>. If set, the next GR will be auto-filled from the series. Leave blank to allow free-entry GR numbers. Mark as Primary after saving.
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -396,35 +431,58 @@ export default function BiltyBooks() {
                 </select>
               </div>
             )}
+            {/* Branch selector — selecting a branch also filters the list */}
+            {branchesList.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Branch {!editItem && <span className="text-red-500">*</span>}</label>
+                <select value={form.branch_id}
+                  onChange={e => { setForm(f => ({...f, branch_id: e.target.value})); setFilterBranch(e.target.value); }}
+                  required={!editItem}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">— Select branch —</option>
+                  {branchesList.map(b => (
+                    <option key={b.branch_id} value={b.branch_id}>{b.name} ({b.branch_code})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">From Number {!editItem && form.bilty_type === 'REGULAR' && '*'}</label>
-              {form.bilty_type === 'MANUAL' && !editItem ? (
-                <div className="w-full border border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400 italic">Not required for MANUAL books</div>
-              ) : (
-                <input readOnly={!!editItem || form.bilty_type === 'MANUAL'} required={!editItem && form.bilty_type === 'REGULAR'} type="number" min={1} value={form.from_number}
-                  onChange={e => !editItem && setForm(f => ({...f, from_number: e.target.value}))}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem || form.bilty_type === 'MANUAL' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`} />
-              )}
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                From Number {!editItem && form.bilty_type === 'REGULAR' && <span className="text-red-500">*</span>}
+                {form.bilty_type === 'MANUAL' && <span className="ml-1 text-xs text-slate-400 font-normal">(optional)</span>}
+              </label>
+              <input
+                readOnly={!!editItem && form.bilty_type === 'REGULAR'}
+                required={!editItem && form.bilty_type === 'REGULAR'}
+                type="number" min={1} value={form.from_number}
+                onChange={e => setForm(f => ({...f, from_number: e.target.value}))}
+                placeholder={form.bilty_type === 'MANUAL' ? 'Leave blank for free GR' : ''}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem && form.bilty_type === 'REGULAR' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`}
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">To Number {!editItem && form.bilty_type === 'REGULAR' && '*'}</label>
-              {form.bilty_type === 'MANUAL' && !editItem ? (
-                <div className="w-full border border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400 italic">Not required for MANUAL books</div>
-              ) : (
-                <input readOnly={!!editItem || form.bilty_type === 'MANUAL'} required={!editItem && form.bilty_type === 'REGULAR'} type="number" min={1} value={form.to_number}
-                  onChange={e => !editItem && setForm(f => ({...f, to_number: e.target.value}))}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem || form.bilty_type === 'MANUAL' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`} />
-              )}
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                To Number {!editItem && form.bilty_type === 'REGULAR' && <span className="text-red-500">*</span>}
+                {form.bilty_type === 'MANUAL' && <span className="ml-1 text-xs text-slate-400 font-normal">(optional)</span>}
+              </label>
+              <input
+                readOnly={!!editItem && form.bilty_type === 'REGULAR'}
+                required={!editItem && form.bilty_type === 'REGULAR'}
+                type="number" min={1} value={form.to_number}
+                onChange={e => setForm(f => ({...f, to_number: e.target.value}))}
+                placeholder={form.bilty_type === 'MANUAL' ? 'Leave blank for free GR' : ''}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem && form.bilty_type === 'REGULAR' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Digits (zero-pad)</label>
-              {form.bilty_type === 'MANUAL' && !editItem ? (
-                <div className="w-full border border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400 italic">Not required for MANUAL books</div>
-              ) : (
-                <input readOnly={!!editItem || form.bilty_type === 'MANUAL'} type="number" min={1} max={10} value={form.digits}
-                  onChange={e => !editItem && setForm(f => ({...f, digits: e.target.value}))}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem || form.bilty_type === 'MANUAL' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`} />
-              )}
+              <input
+                readOnly={!!editItem && form.bilty_type === 'REGULAR'}
+                type="number" min={1} max={10} value={form.digits}
+                onChange={e => setForm(f => ({...f, digits: e.target.value}))}
+                placeholder="4"
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${editItem && form.bilty_type === 'REGULAR' ? 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed' : 'border-slate-300'}`}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Prefix</label>
@@ -577,6 +635,7 @@ export default function BiltyBooks() {
               <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 <th className="px-5 py-3 text-left">Book Name</th>
                 <th className="px-5 py-3 text-left">Type</th>
+                <th className="px-5 py-3 text-left">Branch</th>
                 <th className="px-5 py-3 text-left">Scope</th>
                 <th className="px-5 py-3 text-left">Range</th>
                 <th className="px-5 py-3 text-left">Used</th>
@@ -608,12 +667,19 @@ export default function BiltyBooks() {
                         {b.bilty_type}
                       </span>
                     </td>
+                    <td className="px-5 py-3.5 text-slate-500 text-xs">
+                      {b.branch_id
+                        ? (branchesList.find(br => br.branch_id === b.branch_id)?.name ?? <span className="font-mono text-slate-300">{b.branch_id.slice(0,8)}…</span>)
+                        : <span className="text-slate-300 italic">—</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-slate-500 text-xs">{b.party_scope}</td>
                     <td className="px-5 py-3.5 text-slate-600 text-xs font-mono">
-                      {b.bilty_type === 'MANUAL' ? <span className="text-slate-400 italic">—</span> : `${b.from_number}–${b.to_number}`}
+                      {b.from_number && b.to_number
+                        ? `${b.from_number}–${b.to_number}`
+                        : <span className="text-slate-400 italic">—</span>}
                     </td>
                     <td className="px-5 py-3.5">
-                      {b.bilty_type === 'MANUAL' ? (
+                      {b.bilty_type === 'MANUAL' && !b.from_number ? (
                         <span className="text-xs text-slate-400 italic">Hand-written</span>
                       ) : (
                         <div className="flex items-center gap-2">

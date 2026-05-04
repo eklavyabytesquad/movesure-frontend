@@ -24,6 +24,7 @@ interface Challan {
   challan_date: string;
   challan_status: 'DRAFT' | 'OPEN' | 'DISPATCHED' | 'ARRIVED_HUB' | 'CLOSED';
   is_primary: boolean;
+  branch_id: string | null;
   transport_name: string | null;
   vehicle_info: { vehicle_no?: string } | null;
   to_branch_id: string | null;
@@ -41,6 +42,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const DEFAULT_FORM = {
+  branch_id: '',
   to_branch_id: '',
   from_branch_id: '',
   book_id: '',
@@ -151,6 +153,7 @@ export default function ChallanCreation() {
           challan_date: form.challan_date,
           is_primary:   form.is_primary,
         };
+        if (form.branch_id)      body.branch_id      = form.branch_id;
         if (form.to_branch_id)   body.to_branch_id   = form.to_branch_id;
         if (form.from_branch_id) body.from_branch_id = form.from_branch_id;
         if (form.book_id)        body.book_id        = form.book_id;
@@ -180,6 +183,7 @@ export default function ChallanCreation() {
   function openEdit(c: Challan) {
     setEditItem(c);
     setForm({
+      branch_id:      '',
       challan_date:   c.challan_date,
       from_branch_id: c.from_branch_id ?? '',
       to_branch_id:   c.to_branch_id ?? '',
@@ -336,6 +340,15 @@ export default function ChallanCreation() {
               value={form.challan_date}
               onChange={e => setForm(p => ({ ...p, challan_date: e.target.value }))}
             />
+            {!editItem && (
+              <SearchableDropdown
+                label="Create Under Branch"
+                value={form.branch_id}
+                onChange={val => setForm(p => ({ ...p, branch_id: val }))}
+                options={branchOptions}
+                placeholder="Current branch (default)"
+              />
+            )}
             <SearchableDropdown
               label="From Branch"
               value={form.from_branch_id}

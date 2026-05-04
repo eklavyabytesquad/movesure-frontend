@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { City, Consignor, Consignee, Transport, ManualBilty, ManualForm, VisFlags } from './types';
+import { City, Consignor, Consignee, Transport, ManualBilty, ManualForm, VisFlags, ManualBook } from './types';
 import { TypeaheadInput, TypeaheadItem, focusNextFormElement } from '@/components/dashboard/bilty/ui';
 import ModalPartyRow        from './ModalPartyRow';
 import ModalRouteSection    from './ModalRouteSection';
@@ -20,6 +20,7 @@ interface Props {
   consignors: Consignor[];
   consignees: Consignee[];
   transports: Transport[];
+  manualBooks: ManualBook[];
   cityTransportMap: Record<string, { transport_id: string; mobile?: string }[]>;
   editItem: ManualBilty | null;
   saving: boolean;
@@ -31,15 +32,17 @@ interface Props {
   onChangeMulti: (patch: Partial<ManualForm>) => void;
   onSubmit: (e: React.FormEvent) => void;
   onClearError: () => void;
+  onFetchNextGr: (bookId: string) => Promise<void>;
 }
 
 export default function ManualBiltyModal({
-  open, onClose, form, vis, cities, consignors, consignees, transports, cityTransportMap,
+  open, onClose, form, vis, cities, consignors, consignees, transports, manualBooks, cityTransportMap,
   editItem, saving, error, grError, ewbNumbers, setEwbNumbers,
-  onChange, onChangeMulti, onSubmit, onClearError,
+  onChange, onChangeMulti, onSubmit, onClearError, onFetchNextGr,
 }: Props) {
 
   const saveBtnRef = useRef<HTMLButtonElement>(null);
+  const [grLoading, setGrLoading] = useState(false);
 
   // ── Display-text state for all typeahead fields ────────────────────────────
   const [fromCityText,  setFromCityText]  = useState('');
@@ -199,6 +202,44 @@ export default function ManualBiltyModal({
               onChange={e => onChange('bilty_date', e.target.value)}
               className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white" />
           </div>
+          {/* Bill Book selector */}
+          {!editItem && manualBooks.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bill Book</span>
+              <select
+                value={form.book_id}
+                tabIndex={-1}
+                onChange={async e => {
+                  const bookId = e.target.value;
+                  if (bookId) {
+                    setGrLoading(true);
+                    try { await onFetchNextGr(bookId); } finally { setGrLoading(false); }
+                  } else {
+                    onChange('book_id', '');
+                    onChange('gr_no', '');
+                  }
+                }}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+              >
+                <option value="">— None (free entry) —</option>
+                {manualBooks.map(b => (
+                  <option key={b.book_id} value={b.book_id}>
+                    {b.book_name ?? b.book_id}
+                    {b.branch_name ? ` [${b.branch_name}]` : ''}
+                    {b.is_primary ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+              {grLoading && <span className="text-[10px] text-violet-500 animate-pulse">Fetching GR…</span>}
+              {!grLoading && grError && <span className="text-[10px] text-red-500 font-semibold">{grError}</span>}
+              {!grLoading && !grError && form.book_id && form.gr_no && (
+                <span className="text-[10px] text-emerald-600">GR: <strong>{form.gr_no}</strong> (editable)</span>
+              )}
+              {!grLoading && !grError && form.book_id && !form.gr_no && (
+                <span className="text-[10px] text-slate-400 italic">No series — enter GR freely</span>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">From City</span>
             <div className="w-52">
