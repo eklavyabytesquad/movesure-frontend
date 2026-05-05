@@ -33,27 +33,66 @@ export default function SearchableDropdown({
 }: SearchableDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const panelId = useRef(`sdd-${Math.random().toString(36).slice(2)}`);
 
   const selected = options.find((o) => o.value === value);
   const filtered = search
     ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
     : options;
 
+  // Position the panel using fixed coords so it escapes any overflow:hidden ancestor
+  function updatePanelPosition() {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const panelHeight = 260;
+    if (spaceBelow < panelHeight && rect.top > panelHeight) {
+      setPanelStyle({
+        position: 'fixed',
+        bottom: window.innerHeight - rect.top + 2,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+      });
+    } else {
+      setPanelStyle({
+        position: 'fixed',
+        top: rect.bottom + 2,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+      });
+    }
+  }
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        // also check if click is inside the fixed panel
+        const panel = document.getElementById(panelId.current);
+        if (panel && panel.contains(e.target as Node)) return;
         setOpen(false);
         setSearch('');
       }
     }
+    function handleScroll() {
+      if (open) updatePanelPosition();
+    }
     if (open) {
+      updatePanelPosition();
       document.addEventListener('mousedown', handleClickOutside);
-      // focus search after paint
+      window.addEventListener('scroll', handleScroll, true);
       setTimeout(() => searchRef.current?.focus(), 10);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const triggerClasses =
@@ -68,7 +107,7 @@ export default function SearchableDropdown({
   }
 
   return (
-    <div className={`relative w-full ${className}`} ref={containerRef}>
+    <div className={`relative w-full ${className}`}>
       {label && (
         <label className="block text-sm font-semibold text-gray-800 mb-1.5">
           {label}
@@ -78,9 +117,10 @@ export default function SearchableDropdown({
 
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen((v) => !v)}
+        onClick={() => { if (!disabled) setOpen((v) => !v); }}
         className={`w-full border border-gray-300 bg-white text-left text-gray-900
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition
           disabled:bg-gray-50 disabled:text-gray-400 flex items-center justify-between gap-2 ${triggerClasses}`}
@@ -98,9 +138,13 @@ export default function SearchableDropdown({
         </svg>
       </button>
 
-      {/* Dropdown panel */}
+      {/* Dropdown panel — rendered with fixed positioning to escape overflow:hidden ancestors */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full min-w-[180px] bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+        <div
+          id={panelId.current}
+          style={panelStyle}
+          className="min-w-44 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+        >
           {/* Search */}
           <div className="p-2 border-b border-gray-100">
             <input
@@ -125,7 +169,7 @@ export default function SearchableDropdown({
               </li>
             )}
             {filtered.length === 0 ? (
-              <li className="px-4 py-2 text-sm text-gray-400 text-center py-3">No results found</li>
+              <li className="px-4 py-3 text-sm text-gray-400 text-center">No results found</li>
             ) : (
               filtered.map((o) => (
                 <li

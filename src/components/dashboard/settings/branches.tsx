@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { getUser } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { FormInput, SubmitButton, ActionButton } from './ui';
+import { FormInput, SubmitButton, ActionButton, SearchableDropdown } from './ui';
+import type { DropdownOption } from './ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SLUGS } from '@/lib/permissions';
 
@@ -14,7 +15,16 @@ interface Branch {
   branch_code: string;
   branch_type: string;
   address: string | null;
+  mobile_number: string | null;
+  owner_name: string | null;
+  city_id: string | null;
   created_at: string;
+}
+
+interface City {
+  city_id: string;
+  city_name: string;
+  city_code?: string | null;
 }
 
 const BRANCH_TYPES = [
@@ -30,6 +40,7 @@ export default function BranchesManager() {
   const canUpdate = can(SLUGS.MASTER_BRANCHES_UPDATE);
 
   const [branches, setBranches]     = useState<Branch[]>([]);
+  const [cities, setCities]         = useState<City[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [success, setSuccess]       = useState('');
@@ -40,12 +51,14 @@ export default function BranchesManager() {
   // Create form
   const [form, setForm] = useState({
     name: '', branch_code: '', branch_type: 'branch', address: '',
+    mobile_number: '', owner_name: '', city_id: '',
   });
 
   // Inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm]   = useState({
     name: '', branch_code: '', branch_type: 'branch', address: '',
+    mobile_number: '', owner_name: '', city_id: '',
   });
 
   async function fetchBranches() {
@@ -64,10 +77,18 @@ export default function BranchesManager() {
     }
   }
 
+  async function fetchCities() {
+    try {
+      const res = await apiFetch('/v1/master/cities?is_active=true');
+      if (res.ok) { const d = await res.json(); setCities(d.cities ?? d ?? []); }
+    } catch { /* non-fatal */ }
+  }
+
   useEffect(() => {
     const user = getUser();
     if (!user) { router.replace('/auth/login'); return; }
     fetchBranches();
+    fetchCities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,7 +103,10 @@ export default function BranchesManager() {
         branch_code: form.branch_code.trim().toUpperCase(),
         branch_type: form.branch_type,
       };
-      if (form.address.trim()) payload.address = form.address.trim();
+      if (form.address.trim())       payload.address       = form.address.trim();
+      if (form.mobile_number.trim()) payload.mobile_number = form.mobile_number.trim();
+      if (form.owner_name.trim())    payload.owner_name    = form.owner_name.trim();
+      if (form.city_id)              payload.city_id       = form.city_id;
 
       const res = await apiFetch(`/v1/master/branches`, {
         method: 'POST',
@@ -101,7 +125,7 @@ export default function BranchesManager() {
         return;
       }
       setSuccess(`Branch "${data.branch.name}" created.`);
-      setForm({ name: '', branch_code: '', branch_type: 'branch', address: '' });
+      setForm({ name: '', branch_code: '', branch_type: 'branch', address: '', mobile_number: '', owner_name: '', city_id: '' });
       setShowForm(false);
       fetchBranches();
     } catch {
@@ -116,13 +140,15 @@ export default function BranchesManager() {
     setError('');
     setSuccess('');
     try {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | null> = {
         name: editForm.name.trim(),
         branch_code: editForm.branch_code.trim().toUpperCase(),
         branch_type: editForm.branch_type,
+        address:       editForm.address.trim()       || '',
+        mobile_number: editForm.mobile_number.trim() || '',
+        owner_name:    editForm.owner_name.trim()    || '',
+        city_id:       editForm.city_id              || null,
       };
-      if (editForm.address.trim()) payload.address = editForm.address.trim();
-      else payload.address = '';
 
       const res = await apiFetch(`/v1/master/branches/${branch_id}`, {
         method: 'PATCH',
@@ -150,14 +176,20 @@ export default function BranchesManager() {
   function startEdit(b: Branch) {
     setEditingId(b.branch_id);
     setEditForm({
-      name: b.name,
-      branch_code: b.branch_code,
-      branch_type: b.branch_type,
-      address: b.address ?? '',
+      name:          b.name,
+      branch_code:   b.branch_code,
+      branch_type:   b.branch_type,
+      address:       b.address       ?? '',
+      mobile_number: b.mobile_number ?? '',
+      owner_name:    b.owner_name    ?? '',
+      city_id:       b.city_id       ?? '',
     });
     setError('');
     setSuccess('');
   }
+
+  const cityName = (id: string | null) => id ? (cities.find(c => c.city_id === id)?.city_name ?? '—') : '—';
+  const cityOptions: DropdownOption[] = cities.map(c => ({ value: c.city_id, label: c.city_name }));
 
   const typeBadge = (type: string) => {
     const map: Record<string, string> = {
@@ -214,7 +246,7 @@ export default function BranchesManager() {
       {showForm && (
         <form onSubmit={handleCreate} className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800 mb-4">New Branch</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormInput
               label="Branch Name *"
               required
@@ -242,6 +274,26 @@ export default function BranchesManager() {
                 ))}
               </select>
             </div>
+            <FormInput
+              label="Owner / Manager"
+              value={form.owner_name}
+              onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))}
+              placeholder="Rajesh Gupta"
+            />
+            <FormInput
+              label="Mobile Number"
+              value={form.mobile_number}
+              onChange={(e) => setForm((f) => ({ ...f, mobile_number: e.target.value }))}
+              placeholder="9876543210"
+              maxLength={20}
+            />
+            <SearchableDropdown
+              label="City"
+              value={form.city_id}
+              onChange={(val) => setForm((f) => ({ ...f, city_id: val }))}
+              options={cityOptions}
+              placeholder="Select city"
+            />
             <FormInput
               label="Address"
               value={form.address}
@@ -272,7 +324,10 @@ export default function BranchesManager() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Name</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Code</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Type</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden lg:table-cell">Address</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden lg:table-cell">City</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden xl:table-cell">Owner</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden xl:table-cell">Mobile</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden 2xl:table-cell">Address</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
@@ -282,7 +337,7 @@ export default function BranchesManager() {
                   /* ── Inline edit row ── */
                   <tr key={b.branch_id} className="bg-indigo-50/40">
                     <td colSpan={5} className="px-5 py-4">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-3">
                         <FormInput
                           label="Name *"
                           required
@@ -310,6 +365,29 @@ export default function BranchesManager() {
                             ))}
                           </select>
                         </div>
+                        <FormInput
+                          label="Owner / Manager"
+                          size="sm"
+                          value={editForm.owner_name}
+                          onChange={(e) => setEditForm((f) => ({ ...f, owner_name: e.target.value }))}
+                          placeholder="Optional"
+                        />
+                        <FormInput
+                          label="Mobile"
+                          size="sm"
+                          value={editForm.mobile_number}
+                          onChange={(e) => setEditForm((f) => ({ ...f, mobile_number: e.target.value }))}
+                          placeholder="Optional"
+                          maxLength={20}
+                        />
+                        <SearchableDropdown
+                          label="City"
+                          size="sm"
+                          value={editForm.city_id}
+                          onChange={(val) => setEditForm((f) => ({ ...f, city_id: val }))}
+                          options={cityOptions}
+                          placeholder="Select city"
+                        />
                         <FormInput
                           label="Address"
                           size="sm"
@@ -345,9 +423,10 @@ export default function BranchesManager() {
                         {b.branch_type}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-400 text-xs hidden lg:table-cell truncate max-w-45">
-                      {b.address ?? '—'}
-                    </td>
+                    <td className="px-5 py-3.5 text-slate-600 text-xs hidden lg:table-cell">{cityName(b.city_id)}</td>
+                    <td className="px-5 py-3.5 text-slate-600 text-xs hidden xl:table-cell">{b.owner_name ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-slate-500 text-xs hidden xl:table-cell font-mono">{b.mobile_number ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-slate-400 text-xs hidden 2xl:table-cell truncate max-w-45">{b.address ?? '—'}</td>
                     <td className="px-5 py-3.5 text-right">
                       {canUpdate && (
                       <ActionButton variant="edit" onClick={() => startEdit(b)}>
