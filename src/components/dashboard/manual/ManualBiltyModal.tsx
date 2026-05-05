@@ -194,65 +194,77 @@ export default function ManualBiltyModal({
           </button>
         </div>
 
-        {/* ── Secondary bar: Bilty Date + From City (rarely changed, outside tab flow) ── */}
-        <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bilty Date</span>
-            <input type="date" value={form.bilty_date} tabIndex={-1}
-              onChange={e => onChange('bilty_date', e.target.value)}
-              className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white" />
-          </div>
-          {/* Bill Book selector */}
-          {!editItem && manualBooks.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bill Book</span>
-              <select
-                value={form.book_id}
-                tabIndex={-1}
-                onChange={async e => {
-                  const bookId = e.target.value;
-                  if (bookId) {
-                    setGrLoading(true);
-                    try { await onFetchNextGr(bookId); } finally { setGrLoading(false); }
-                  } else {
-                    onChange('book_id', '');
-                    onChange('gr_no', '');
+        {/* ── Secondary bar: Bilty Date + Bill Book + From City ── */}
+        <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-4 flex-nowrap overflow-x-auto">
+
+            {/* Bilty Date */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bilty Date</span>
+              <input type="date" value={form.bilty_date} tabIndex={-1}
+                onChange={e => onChange('bilty_date', e.target.value)}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white" />
+            </div>
+
+            {/* Bill Book selector — only for new bilties */}
+            {!editItem && manualBooks.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Bill Book</span>
+                <select
+                  value={form.book_id}
+                  tabIndex={-1}
+                  onChange={async e => {
+                    const bookId = e.target.value;
+                    if (bookId) {
+                      setGrLoading(true);
+                      try { await onFetchNextGr(bookId); } finally { setGrLoading(false); }
+                    } else {
+                      onChange('book_id', '');
+                      onChange('gr_no', '');
+                    }
+                  }}
+                  className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                >
+                  <option value="">— None (free entry) —</option>
+                  {manualBooks.map(b => (
+                    <option key={b.book_id} value={b.book_id}>
+                      {b.book_name ?? b.book_id}
+                      {b.branch_name ? ` [${b.branch_name}]` : ''}
+                      {b.is_primary ? ' ★' : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* Fixed-width status pill — always occupies space so layout never shifts */}
+                <span className="inline-flex items-center min-w-30 h-6 text-[10px]">
+                  {grLoading
+                    ? <span className="text-violet-500 animate-pulse">Loading…</span>
+                    : grError
+                      ? <span className="text-red-500 font-semibold truncate">{grError}</span>
+                      : form.book_id && form.gr_no
+                        ? <span className="text-emerald-600">GR: <strong>{form.gr_no}</strong></span>
+                        : form.book_id
+                          ? <span className="text-slate-400 italic">Free entry</span>
+                          : null
                   }
-                }}
-                className="border border-slate-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
-              >
-                <option value="">— None (free entry) —</option>
-                {manualBooks.map(b => (
-                  <option key={b.book_id} value={b.book_id}>
-                    {b.book_name ?? b.book_id}
-                    {b.branch_name ? ` [${b.branch_name}]` : ''}
-                    {b.is_primary ? ' ★' : ''}
-                  </option>
-                ))}
-              </select>
-              {grLoading && <span className="text-[10px] text-violet-500 animate-pulse">Fetching GR…</span>}
-              {!grLoading && grError && <span className="text-[10px] text-red-500 font-semibold">{grError}</span>}
-              {!grLoading && !grError && form.book_id && form.gr_no && (
-                <span className="text-[10px] text-emerald-600">GR: <strong>{form.gr_no}</strong> (editable)</span>
-              )}
-              {!grLoading && !grError && form.book_id && !form.gr_no && (
-                <span className="text-[10px] text-slate-400 italic">No series — enter GR freely</span>
-              )}
+                </span>
+              </div>
+            )}
+
+            {/* From City */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">From City</span>
+              <div className="w-48">
+                <TypeaheadInput
+                  items={cityItems}
+                  value={fromCityText}
+                  onChange={handleFromCityChange}
+                  onSelect={item => { onChange('from_city_id', item.id); setFromCityText(item.label); }}
+                  placeholder="Name or code…"
+                />
+              </div>
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">From City</span>
-            <div className="w-52">
-              <TypeaheadInput
-                items={cityItems}
-                value={fromCityText}
-                onChange={handleFromCityChange}
-                onSelect={item => { onChange('from_city_id', item.id); setFromCityText(item.label); }}
-                placeholder="Name or code…"
-              />
-            </div>
+
           </div>
-          <span className="text-[10px] text-slate-300 italic hidden lg:inline">Rarely changed — not in Tab flow</span>
         </div>
 
         {/* ── Error banner ── */}

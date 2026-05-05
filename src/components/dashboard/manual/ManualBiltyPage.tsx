@@ -169,40 +169,32 @@ export default function ManualBiltyPage() {
     setShowModal(true);
   }
 
-  // Compute GR number from book's current_number (avoids the peek API returning current+1)
-  function computeGrFromBook(book: ManualBook): string {
-    if (!book.prefix && !book.postfix && !book.digits) return '';
-    const num = String(book.current_number).padStart(book.digits ?? 4, '0');
-    return `${book.prefix ?? ''}${num}${book.postfix ?? ''}`;
-  }
-
-  // Select a book: auto-fill GR from current_number and from_city from book_defaults
+  // Select a book: call peek-gr to get the true next GR, and apply from_city from book_defaults
   async function fetchNextGr(bookId: string) {
     const book = manualBooks.find(b => b.book_id === bookId);
 
-    // Build patch — always apply from_city if book has a default
+    // Always patch book_id + from_city default immediately (no flicker)
     const patch: Partial<ManualForm> = { book_id: bookId };
     if (book?.book_defaults?.from_city_id) {
       patch.from_city_id = book.book_defaults.from_city_id;
     }
+    setForm(f => ({ ...f, ...patch }));
 
-    if (!book) {
-      setForm(f => ({ ...f, ...patch, gr_no: '' }));
-      return;
+    try {
+      const res = await apiFetch(`/v1/bilty/peek-gr/${bookId}`);
+      if (!res.ok) { setGrError('Could not fetch GR number.'); return; }
+      const d = await res.json();
+      if (d.is_exhausted) {
+        showToast('This book is exhausted. Please select another book.');
+        setForm(f => ({ ...f, gr_no: '' }));
+        setGrError('Book exhausted');
+        return;
+      }
+      setGrError('');
+      setForm(f => ({ ...f, gr_no: (d.has_series && d.gr_no) ? d.gr_no : '' }));
+    } catch {
+      setGrError('Unable to reach server.');
     }
-
-    // Check exhausted client-side
-    if (book.current_number > book.to_number) {
-      showToast('This book is exhausted. Please select another book.');
-      setForm(f => ({ ...f, ...patch, gr_no: '' }));
-      setGrError('Book exhausted');
-      return;
-    }
-
-    // Compute GR from current_number directly (peek API returns current+1 which is wrong)
-    const grNo = computeGrFromBook(book);
-    setGrError('');
-    setForm(f => ({ ...f, ...patch, gr_no: grNo }));
   }
 
   function openEdit(b: ManualBilty) {
@@ -443,6 +435,7 @@ export default function ManualBiltyPage() {
         statusFil={statusFil}
         payFil={payFil}
         cityMap={cityMap}
+        manualBooks={manualBooks}
         onSearch={setSearch}
         onStatusFil={setStatusFil}
         onPayFil={setPayFil}

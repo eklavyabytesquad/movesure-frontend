@@ -1,6 +1,6 @@
 'use client';
 
-import { ManualBilty, STATUS_CHIP, PAY_CHIP } from './types';
+import { ManualBilty, ManualBook, STATUS_CHIP, PAY_CHIP } from './types';
 
 interface Props {
   bilties: ManualBilty[];
@@ -9,6 +9,7 @@ interface Props {
   statusFil: string;
   payFil: string;
   cityMap: Record<string, string>;
+  manualBooks: ManualBook[];
   onSearch: (v: string) => void;
   onStatusFil: (v: string) => void;
   onPayFil: (v: string) => void;
@@ -21,10 +22,11 @@ interface Props {
 }
 
 export default function ManualBiltyTable({
-  bilties, loading, search, statusFil, payFil, cityMap,
+  bilties, loading, search, statusFil, payFil, cityMap, manualBooks,
   onSearch, onStatusFil, onPayFil, onRefresh,
   onEdit, onDelete, deletingId, canUpdate, canDelete,
 }: Props) {
+  const bookMap = Object.fromEntries(manualBooks.map(b => [b.book_id, b.book_name ?? b.book_id]));
   const filtered = bilties.filter(b => {
     const q = search.toLowerCase();
     const matchSearch = !q ||
@@ -124,6 +126,7 @@ export default function ManualBiltyTable({
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">GR No</th>
+                <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">Book</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">Date</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Consignor</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Consignee</th>
@@ -140,6 +143,12 @@ export default function ManualBiltyTable({
               {filtered.map(b => (
                 <tr key={b.bilty_id} className="hover:bg-slate-50/70 transition-colors group">
                   <td className="px-5 py-3 font-mono font-bold text-slate-900 whitespace-nowrap">{b.gr_no}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    {b.book_id
+                      ? <span className="text-xs font-medium text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">{bookMap[b.book_id] ?? b.book_name ?? '—'}</span>
+                      : <span className="text-xs text-slate-400">—</span>
+                    }
+                  </td>
                   <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{b.bilty_date}</td>
                   <td className="px-5 py-3 max-w-40 truncate uppercase text-slate-700 font-medium">{b.consignor_name}</td>
                   <td className="px-5 py-3 max-w-40 truncate uppercase text-slate-600">{b.consignee_name}</td>
