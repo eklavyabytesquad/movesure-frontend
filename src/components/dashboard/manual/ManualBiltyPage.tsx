@@ -217,10 +217,6 @@ export default function ManualBiltyPage() {
       (b.e_way_bills ?? []).map(e => e.ewb_no).filter(Boolean) as string[];
     if (existingEwbs.length === 0 && b.ewb_no) existingEwbs.push(b.ewb_no);
     setEwbNumbers(existingEwbs);
-    // Always show EWB section in edit mode when bilty has EWB data
-    if (existingEwbs.length > 0) {
-      setVis(v => ({ ...v, show_eway_bill: true }));
-    }
     setForm({
       gr_no:            b.gr_no ?? '',
       book_id:          '',

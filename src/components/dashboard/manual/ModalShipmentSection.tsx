@@ -89,13 +89,11 @@ export default function ModalShipmentSection({
         </div>
       </div>
 
-      {/* E-Way Bills */}
-      {vis.show_eway_bill && (
-        <div>
-          <p className={SEC}>E-Way Bills</p>
-          <SectionEwb ewbNumbers={ewbNumbers} setEwbNumbers={setEwbNumbers} />
-        </div>
-      )}
+      {/* E-Way Bills — always visible */}
+      <div>
+        <p className={SEC}>E-Way Bills</p>
+        <SectionEwb ewbNumbers={ewbNumbers} setEwbNumbers={setEwbNumbers} />
+      </div>
 
       {/* Charges */}
       <div>
