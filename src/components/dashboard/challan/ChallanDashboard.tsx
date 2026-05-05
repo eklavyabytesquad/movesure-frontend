@@ -299,12 +299,33 @@ export default function ChallanDashboard() {
       const toBranch   = branches.find(b => b.branch_id === selectedChallan.to_branch_id);
       const vInfo      = selectedChallan.vehicle_info ?? {};
 
+      // Resolve branch cities from cityMap
+      const fromBranchCity = fromBranch?.city_id ? cityMap[fromBranch.city_id] : undefined;
+      const toBranchCity   = toBranch?.city_id   ? cityMap[toBranch.city_id]   : undefined;
+
+      // Load company logo (optional — silently ignored if unavailable)
+      let logoDataUrl: string | undefined;
+      try {
+        const logoRes = await fetch('/logo-assets/RGT.png');
+        if (logoRes.ok) {
+          const blob = await logoRes.blob();
+          logoDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror  = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch { /* logo is optional */ }
+
       const printData: ChallanPrintData = {
         challan_no:       selectedChallan.challan_no ?? undefined,
         challan_date:     selectedChallan.challan_date,
         challan_status:   selectedChallan.challan_status ?? selectedChallan.status,
         from_branch_name: fromBranch?.name,
+        from_branch_city: fromBranchCity,
         to_branch_name:   toBranch?.name,
+        to_branch_city:   toBranchCity,
         transport_name:   selectedChallan.transport_name ?? undefined,
         vehicle_no:       vInfo.vehicle_no,
         vehicle_type:     vInfo.vehicle_type,
@@ -318,7 +339,7 @@ export default function ChallanDashboard() {
         total_freight:  selectedChallan.total_freight,
       };
 
-      const blobUrl = generateChallanA4LandscapeA(printData, tpl);
+      const blobUrl = generateChallanA4LandscapeA(printData, tpl, logoDataUrl);
       setPrintUrl(blobUrl);
     } catch {
       setError('Failed to generate challan PDF.');
@@ -434,6 +455,7 @@ export default function ChallanDashboard() {
         selectedId={selectedId}
         selectedChallan={selectedChallan}
         primaryBook={primaryBook}
+        branches={branches}
         actionId={actionId}
         canCreate={canCreate}
         canUpdate={canUpdate}

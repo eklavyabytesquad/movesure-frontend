@@ -172,13 +172,26 @@ export default function ManualBiltyPage() {
   // Select a book: call peek-gr to get the true next GR, and apply from_city from book_defaults
   async function fetchNextGr(bookId: string) {
     const book = manualBooks.find(b => b.book_id === bookId);
+    const bd   = book?.book_defaults;
 
     // Always patch book_id + from_city default immediately (no flicker)
     const patch: Partial<ManualForm> = { book_id: bookId };
-    if (book?.book_defaults?.from_city_id) {
-      patch.from_city_id = book.book_defaults.from_city_id;
-    }
+    if (bd?.from_city_id) patch.from_city_id = bd.from_city_id;
+    if (bd?.to_city_id)   patch.to_city_id   = bd.to_city_id;
+    if (bd?.payment_mode) patch.payment_mode  = bd.payment_mode;
+    if (bd?.delivery_type) patch.delivery_type = bd.delivery_type;
     setForm(f => ({ ...f, ...patch }));
+
+    // Update visibility flags from this book's defaults
+    if (bd) {
+      setVis({
+        show_invoice:          bd.show_invoice          ?? true,
+        show_eway_bill:        bd.show_eway_bill         ?? false,
+        show_itemized_charges: bd.show_itemized_charges  ?? false,
+        show_pvt_marks:        bd.show_pvt_marks         ?? true,
+        show_contain:          bd.show_contain           ?? true,
+      });
+    }
 
     try {
       const res = await apiFetch(`/v1/bilty/peek-gr/${bookId}`);

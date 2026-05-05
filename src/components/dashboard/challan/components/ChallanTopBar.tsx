@@ -1,5 +1,5 @@
 // Top header bar: title, challan selector dropdown, status badge, action buttons
-import { Challan, ChallanBook, isChallanEditable, bookLabel } from '../types';
+import { Challan, ChallanBook, Branch, isChallanEditable, bookLabel } from '../types';
 import ChallanSelector from './ChallanSelector';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -12,6 +12,7 @@ interface Props {
   selectedId: string;
   selectedChallan: Challan | null;
   primaryBook: ChallanBook | null;
+  branches: Branch[];
   actionId: string | null;
   canCreate: boolean;
   canUpdate: boolean;
@@ -23,12 +24,19 @@ interface Props {
 }
 
 export default function ChallanTopBar({
-  challans, selectedId, selectedChallan, primaryBook, actionId,
+  challans, selectedId, selectedChallan, primaryBook, branches, actionId,
   canCreate, canUpdate, showForm, loadingChallans,
   onSelectChallan, onDoAction, onToggleForm,
 }: Props) {
   const isEditable = selectedChallan ? isChallanEditable(selectedChallan) : false;
   const status = selectedChallan?.challan_status ?? selectedChallan?.status ?? '';
+
+  const fromBranch = selectedChallan?.from_branch_id
+    ? branches.find(b => b.branch_id === selectedChallan.from_branch_id)
+    : null;
+  const toBranch = selectedChallan?.to_branch_id
+    ? branches.find(b => b.branch_id === selectedChallan.to_branch_id)
+    : null;
 
   return (
     <div className="px-5 pt-3 pb-2.5 bg-white border-b border-gray-200 shrink-0 flex items-center gap-3 flex-wrap">
@@ -73,6 +81,24 @@ export default function ChallanTopBar({
             <span className="text-[10px] text-yellow-700 font-semibold bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full">
               ★ Primary
             </span>
+          )}
+          {/* From → To branch route */}
+          {(fromBranch || toBranch) && (
+            <div className="flex items-center gap-1 text-[10px] font-semibold">
+              {fromBranch && (
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  {fromBranch.name}
+                </span>
+              )}
+              {fromBranch && toBranch && (
+                <span className="text-gray-400">→</span>
+              )}
+              {toBranch && (
+                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                  {toBranch.name}
+                </span>
+              )}
+            </div>
           )}
         </div>
       )}

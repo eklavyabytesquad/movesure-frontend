@@ -1,6 +1,6 @@
 // ── Shared types for the Challan module ─────────────────────────────────
 
-export interface Branch { branch_id: string; name: string; }
+export interface Branch { branch_id: string; name: string; city_id?: string; }
 
 export interface ChallanBook {
   book_id: string;

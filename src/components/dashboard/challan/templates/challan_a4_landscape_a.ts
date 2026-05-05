@@ -1,9 +1,6 @@
 /**
  * Template slug: challan-a4-landscape-a
- * Layout: Landscape A4 challan manifest
- *
- * Shows all bilties on a challan in a table, with company header,
- * branch route (From → To), vehicle / driver / owner info, and totals.
+ * Clean black-and-white landscape A4 challan — RGT Logistics
  *
  * Required metadata keys (store in DB challan_template.config):
  * {
@@ -11,8 +8,8 @@
  *   "COMPANY_GSTIN":   "07ABCPC0876F1Z1",
  *   "COMPANY_MOBILE":  "9211350190",
  *   "COMPANY_ADDRESS": "B-174, Dilshad Garden, New Delhi-110095",
- *   "COMPANY_EMAIL":   "rgtlogisticscompany@gmail.com",   (optional)
- *   "COMPANY_WEBSITE": "www.rgtlogistics.com"             (optional)
+ *   "COMPANY_EMAIL":   "rgtlogisticscompany@gmail.com",
+ *   "COMPANY_WEBSITE": "www.rgtlogistics.com"
  * }
  */
 
@@ -46,21 +43,22 @@ export interface ChallanPrintData {
 
   // Branch info
   from_branch_name?: string;
+  from_branch_city?: string;
   to_branch_name?: string;
+  to_branch_city?: string;
 
-  // Transport / vehicle
+  // Fleet / transport
   transport_name?: string | null;
   transport_gstin?: string | null;
   vehicle_no?: string;
   vehicle_type?: string;
   driver_name?: string;
   driver_mobile?: string;
-  owner_name?: string;       // from fleet / vehicle lookup
+  owner_name?: string;
 
-  // Bilties on this challan
   bilties: ChallanBiltyRow[];
 
-  // Pre-computed totals (optional — computed from bilties if absent)
+  // Pre-computed totals (computed from bilties if absent)
   total_packages?: number;
   total_weight?: number;
   total_freight?: number;
@@ -78,303 +76,320 @@ export interface ChallanTemplateDef {
   is_active: boolean;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── B&W Palette ──────────────────────────────────────────────────────────────
 
-const R = String.fromCharCode(8377); // ₹
-const NAVY: [number, number, number] = [20, 40, 100];
-const WHITE: [number, number, number] = [255, 255, 255];
-const LIGHT_BG: [number, number, number] = [230, 235, 255];
+const BK:  [number,number,number] = [0,   0,   0  ];
+const D40: [number,number,number] = [40,  40,  40 ];
+const D80: [number,number,number] = [80,  80,  80 ];
+const D130:[number,number,number] = [130, 130, 130];
+const ALT: [number,number,number] = [245, 245, 245];
+const WHT: [number,number,number] = [255, 255, 255];
 
-// ── Column definition ────────────────────────────────────────────────────────
+const RS = 'Rs.'; // jsPDF built-in fonts do not support ₹ glyph
+
+// ── Column definitions ────────────────────────────────────────────────────────
 
 interface ColDef {
   label: string;
   key: keyof ChallanBiltyRow | 'serial';
-  w: number; // relative weight, scaled to fit
+  w: number;
   align: 'left' | 'center' | 'right';
   render?: (row: ChallanBiltyRow, idx: number) => string;
 }
 
 const COLUMNS: ColDef[] = [
-  {
-    label: 'S.No', key: 'serial', w: 7, align: 'center',
-    render: (_, i) => String(i + 1),
-  },
-  {
-    label: 'GR No', key: 'gr_no', w: 22, align: 'center',
-    render: (r) => r.gr_no ?? '',
-  },
-  {
-    label: 'Date', key: 'bilty_date', w: 16, align: 'center',
-    render: (r) => r.bilty_date ?? '',
-  },
-  {
-    label: 'Consignor', key: 'consignor_name', w: 30, align: 'left',
-    render: (r) => r.consignor_name ?? '',
-  },
-  {
-    label: 'Consignee', key: 'consignee_name', w: 30, align: 'left',
-    render: (r) => r.consignee_name ?? '',
-  },
-  {
-    label: 'Destination', key: 'to_city_name', w: 24, align: 'left',
-    render: (r) => r.to_city_name ?? '',
-  },
-  {
-    label: 'Contents', key: 'contain', w: 32, align: 'left',
-    render: (r) => r.contain ?? r.pvt_marks ?? '',
-  },
-  {
-    label: 'Pkgs', key: 'no_of_pkg', w: 10, align: 'center',
-    render: (r) => r.no_of_pkg != null ? String(r.no_of_pkg) : '',
-  },
-  {
-    label: 'Wt (kg)', key: 'weight', w: 16, align: 'right',
-    render: (r) => r.weight != null ? r.weight.toFixed(1) : '',
-  },
-  {
-    label: 'Freight', key: 'total_amount', w: 18, align: 'right',
-    render: (r) => r.total_amount != null ? `${R}${r.total_amount.toFixed(0)}` : '',
-  },
-  {
-    label: 'Mode', key: 'payment_mode', w: 14, align: 'center',
-    render: (r) => r.payment_mode ?? '',
-  },
+  { label: 'S.No',        key: 'serial',        w: 7,  align: 'center', render: (_,i) => String(i+1) },
+  { label: 'GR No',       key: 'gr_no',          w: 22, align: 'center', render: r => r.gr_no ?? '' },
+  { label: 'Date',        key: 'bilty_date',     w: 14, align: 'center', render: r => r.bilty_date ?? '' },
+  { label: 'Consignor',   key: 'consignor_name', w: 28, align: 'left',   render: r => r.consignor_name ?? '' },
+  { label: 'Consignee',   key: 'consignee_name', w: 28, align: 'left',   render: r => r.consignee_name ?? '' },
+  { label: 'Destination', key: 'to_city_name',   w: 22, align: 'left',   render: r => r.to_city_name ?? '' },
+  { label: 'Contents',    key: 'contain',        w: 24, align: 'left',   render: r => r.contain ?? r.pvt_marks ?? '' },
+  { label: 'Pkgs',        key: 'no_of_pkg',      w: 9,  align: 'center', render: r => r.no_of_pkg != null ? String(r.no_of_pkg) : '' },
+  { label: 'Wt(kg)',      key: 'weight',         w: 14, align: 'right',  render: r => r.weight != null ? r.weight.toFixed(1) : '' },
+  { label: 'Freight',     key: 'total_amount',   w: 18, align: 'right',  render: r => r.total_amount != null ? `${RS} ${r.total_amount.toFixed(0)}` : '' },
+  { label: 'Mode',        key: 'payment_mode',   w: 13, align: 'center', render: r => r.payment_mode ?? '' },
+  { label: 'Del.Type',    key: 'delivery_type',  w: 13, align: 'center', render: r => r.delivery_type ?? '' },
 ];
 
-// ── Helper ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function txt(
+function pt(
   doc: jsPDF,
   text: string,
   x: number,
   y: number,
   align: 'left' | 'center' | 'right' = 'left',
-  maxWidth?: number,
+  mw?: number,
 ) {
-  doc.text(text, x, y, { align, maxWidth });
+  doc.text(text, x, y, { align, maxWidth: mw });
 }
 
-// ── Main export ──────────────────────────────────────────────────────────────
+// ── Main export ───────────────────────────────────────────────────────────────
 
 /**
- * Generate a landscape A4 challan manifest PDF.
- * Returns a blob URL string for opening in a new tab or iframe.
+ * Generate a landscape A4 challan PDF (pure B&W).
+ * @param logoDataUrl  Optional base64 data-URL of the company logo (PNG).
+ * Returns a blob URL string.
  */
 export function generateChallanA4LandscapeA(
   data: ChallanPrintData,
   tpl: ChallanTemplateDef,
+  logoDataUrl?: string,
 ): string {
-  // Resolve metadata from config
   const meta: Record<string, string> = {};
-  if (tpl.config) {
-    Object.entries(tpl.config).forEach(([k, v]) => { meta[k] = String(v ?? ''); });
-  }
+  if (tpl.config) Object.entries(tpl.config).forEach(([k, v]) => { meta[k] = String(v ?? ''); });
 
-  // Landscape A4: 297 × 210 mm
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const PW = doc.internal.pageSize.getWidth();   // 297
-  // const PH = doc.internal.pageSize.getHeight();  // 210
-  const ML = 8;
-  const MR = 8;
-  const CW = PW - ML - MR; // usable content width ≈ 281
-  let y = 8;
+  const PW  = doc.internal.pageSize.getWidth();   // 297
+  const PH  = doc.internal.pageSize.getHeight();  // 210
+  const ML  = 10, MR = 10;
+  const CW  = PW - ML - MR; // 277
+  let y     = 10;
 
-  // ── HEADER ────────────────────────────────────────────────────────────────
-  const HDR_H = 18;
-  doc.setFillColor(...NAVY);
-  doc.rect(ML, y, CW, HDR_H, 'F');
-
-  // Left block — company info
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...WHITE);
-  txt(doc, meta.COMPANY_NAME ?? 'Company Name', ML + 3, y + 6);
-  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(200, 220, 255);
-  if (meta.COMPANY_GSTIN) txt(doc, `GSTIN: ${meta.COMPANY_GSTIN}`, ML + 3, y + 10.5);
-  const contactLine = [meta.COMPANY_MOBILE ? `Ph: ${meta.COMPANY_MOBILE}` : '', meta.COMPANY_EMAIL ?? ''].filter(Boolean).join('   ');
-  txt(doc, contactLine, ML + 3, y + 15, 'left', 90);
-
-  // Centre — big title + address
-  doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...WHITE);
-  txt(doc, 'CHALLAN', PW / 2, y + 8, 'center');
-  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(200, 220, 255);
-  if (meta.COMPANY_ADDRESS) txt(doc, meta.COMPANY_ADDRESS, PW / 2, y + 13, 'center', 90);
-
-  // Right block — challan no, date, website
-  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...WHITE);
-  txt(doc, `Challan No: ${data.challan_no ?? '—'}`, PW - MR - 3, y + 6, 'right');
-  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(200, 220, 255);
-  txt(doc, `Date: ${data.challan_date ?? ''}`, PW - MR - 3, y + 11, 'right');
-  if (meta.COMPANY_WEBSITE) txt(doc, meta.COMPANY_WEBSITE, PW - MR - 3, y + 16, 'right');
-
-  y += HDR_H + 2;
-
-  // ── ROUTE + VEHICLE STRIP ────────────────────────────────────────────────
-  const ROUTE_H = 12;
-  doc.setFillColor(...LIGHT_BG);
-  doc.setDrawColor(180, 180, 220);
-  doc.rect(ML, y, CW, ROUTE_H, 'FD');
-
-  // From → To (left-centre area)
-  const fromName = (data.from_branch_name ?? '—').toUpperCase();
-  const toName   = (data.to_branch_name   ?? '—').toUpperCase();
-
-  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 100, 140);
-  txt(doc, 'FROM', ML + 4, y + 3);
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...NAVY);
-  txt(doc, fromName, ML + 4, y + 9, 'left', 70);
-
-  doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(...NAVY);
-  txt(doc, '→', ML + 78, y + 9, 'center');
-
-  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 100, 140);
-  txt(doc, 'TO', ML + 86, y + 3);
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...NAVY);
-  txt(doc, toName, ML + 86, y + 9, 'left', 70);
-
-  // Right side — vehicle / driver / owner / transport (stacked, right-aligned)
-  doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...NAVY);
-  const vehicleStr = [data.vehicle_no, data.vehicle_type].filter(Boolean).join(' | ');
-  if (vehicleStr) txt(doc, vehicleStr, PW - MR - 3, y + 4.5, 'right');
-
-  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(40, 40, 80);
-  const lines: string[] = [];
-  if (data.transport_name)  lines.push(`Transport: ${data.transport_name}`);
-  if (data.transport_gstin) lines.push(`GSTIN: ${data.transport_gstin}`);
-  if (data.driver_name)     lines.push(`Driver: ${data.driver_name}${data.driver_mobile ? ` (${data.driver_mobile})` : ''}`);
-  if (data.owner_name)      lines.push(`Owner: ${data.owner_name}`);
-  lines.forEach((line, li) => {
-    txt(doc, line, PW - MR - 3, y + 7 + li * 3.5, 'right');
-  });
-
-  y += ROUTE_H + 2;
-
-  // ── TABLE HEADER ────────────────────────────────────────────────────────
-  // Scale column widths proportionally to fit CW
-  const totalRelW = COLUMNS.reduce((s, c) => s + c.w, 0);
+  const totalRelW  = COLUMNS.reduce((s, c) => s + c.w, 0);
   const scaledCols = COLUMNS.map(c => ({ ...c, w: (c.w / totalRelW) * CW }));
 
-  const TH = 7;
-  doc.setFillColor(...NAVY);
-  doc.rect(ML, y, CW, TH, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(...WHITE);
-
-  let cx = ML;
-  for (const col of scaledCols) {
-    const tx =
-      col.align === 'right'  ? cx + col.w - 1.5 :
-      col.align === 'center' ? cx + col.w / 2    : cx + 1.5;
-    txt(doc, col.label, tx, y + 4.5, col.align, col.w - 2);
-    // vertical separator
-    if (cx > ML) {
-      doc.setDrawColor(80, 100, 160);
-      doc.line(cx, y, cx, y + TH);
+  // ── Reusable table-header painter ────────────────────────────────────────
+  function drawTableHeader() {
+    const TH = 7;
+    doc.setFillColor(20, 20, 20);
+    doc.rect(ML, y, CW, TH, 'F');
+    doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(...WHT);
+    let cx = ML;
+    for (const col of scaledCols) {
+      const tx =
+        col.align === 'right'  ? cx + col.w - 1.5 :
+        col.align === 'center' ? cx + col.w / 2    : cx + 1.5;
+      pt(doc, col.label, tx, y + 4.5, col.align, col.w - 2);
+      if (cx > ML) { doc.setDrawColor(120, 120, 120); doc.line(cx, y, cx, y + TH); }
+      cx += col.w;
     }
-    cx += col.w;
+    y += TH;
   }
 
-  y += TH;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HEADER
+  // ═══════════════════════════════════════════════════════════════════════════
+  const HDR_H = 24;
+  const LC_W  = 100;
+  const RC_W  = 55;
+  const MC_W  = CW - LC_W - RC_W;
 
-  // ── TABLE ROWS ──────────────────────────────────────────────────────────
-  const ROW_H = 6;
-  const bilties = data.bilties ?? [];
+  // Outer border
+  doc.setDrawColor(...BK).setLineWidth(0.5);
+  doc.rect(ML, y, CW, HDR_H);
 
-  let sumPkgs = 0;
-  let sumWt   = 0;
-  let sumAmt  = 0;
+  // Internal vertical dividers
+  doc.setLineWidth(0.3);
+  doc.line(ML + LC_W, y, ML + LC_W, y + HDR_H);
+  doc.line(ML + LC_W + MC_W, y, ML + LC_W + MC_W, y + HDR_H);
+
+  // — Left col: Logo + company details —
+  let logoEndX = ML + 2;
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', ML + 2, y + 3, 16, 16);
+      logoEndX = ML + 20;
+    } catch { /* logo optional */ }
+  }
+  const cpX   = logoEndX + 1;
+  const cpMax = LC_W - (cpX - ML) - 2;
+
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...BK);
+  pt(doc, meta.COMPANY_NAME ?? '', cpX, y + 7, 'left', cpMax);
+  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D40);
+  if (meta.COMPANY_GSTIN)   pt(doc, `GSTIN: ${meta.COMPANY_GSTIN}`,   cpX, y + 11.5, 'left', cpMax);
+  if (meta.COMPANY_MOBILE)  pt(doc, `Ph: ${meta.COMPANY_MOBILE}`,     cpX, y + 15,   'left', cpMax);
+  if (meta.COMPANY_EMAIL)   pt(doc, meta.COMPANY_EMAIL,                cpX, y + 18.5, 'left', cpMax);
+  if (meta.COMPANY_ADDRESS) pt(doc, meta.COMPANY_ADDRESS,              cpX, y + 22,   'left', cpMax);
+
+  // — Centre col: CHALLAN title —
+  const midX = ML + LC_W + MC_W / 2;
+  doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...BK);
+  pt(doc, 'CHALLAN', midX, y + 14, 'center');
+  if (meta.COMPANY_WEBSITE) {
+    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D80);
+    pt(doc, meta.COMPANY_WEBSITE, midX, y + 21, 'center', MC_W - 4);
+  }
+
+  // — Right col: Challan number + date —
+  const rColX = ML + LC_W + MC_W + RC_W / 2;
+  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(...D130);
+  pt(doc, 'Challan No.', rColX, y + 6, 'center');
+  doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(...BK);
+  pt(doc, data.challan_no ?? '---', rColX, y + 14, 'center');
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...D40);
+  pt(doc, `Date: ${data.challan_date ?? ''}`, rColX, y + 20, 'center');
+
+  y += HDR_H;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROUTE + FLEET STRIP
+  // ═══════════════════════════════════════════════════════════════════════════
+  const INFO_H = 15;
+  doc.setDrawColor(...BK).setLineWidth(0.3);
+  doc.rect(ML, y, CW, INFO_H);
+
+  const ROUTE_W = Math.round(CW * 0.52);
+  doc.line(ML + ROUTE_W, y, ML + ROUTE_W, y + INFO_H);
+
+  const fromName = data.from_branch_name ?? '-';
+  const fromCity = data.from_branch_city ?? '';
+  const toName   = data.to_branch_name   ?? '-';
+  const toCity   = data.to_branch_city   ?? '';
+
+  // Layout: FROM block | arrow 8mm | TO block  (all inside ROUTE_W)
+  const ARROW_W  = 10;
+  const SIDE_W   = (ROUTE_W - ARROW_W) / 2;
+  const fromX    = ML + 3;
+  const arrowX   = ML + SIDE_W + ARROW_W / 2;
+  const toX      = ML + SIDE_W + ARROW_W + 2;
+
+  // FROM
+  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(...D130);
+  pt(doc, 'FROM', fromX, y + 4);
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...BK);
+  pt(doc, fromName, fromX, y + 9.5, 'left', SIDE_W - 4);
+  if (fromCity) {
+    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D80);
+    pt(doc, fromCity, fromX, y + 13.5, 'left', SIDE_W - 4);
+  }
+
+  // Arrow (drawn, not text — avoids font glyph issues)
+  const arrowY = y + 8;
+  doc.setDrawColor(...BK).setLineWidth(0.5);
+  doc.line(arrowX - 4, arrowY, arrowX + 3, arrowY);
+  doc.line(arrowX + 3, arrowY, arrowX, arrowY - 2);
+  doc.line(arrowX + 3, arrowY, arrowX, arrowY + 2);
+
+  // TO
+  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(...D130);
+  pt(doc, 'TO', toX, y + 4);
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...BK);
+  pt(doc, toName, toX, y + 9.5, 'left', SIDE_W - 4);
+  if (toCity) {
+    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D80);
+    pt(doc, toCity, toX, y + 13.5, 'left', SIDE_W - 4);
+  }
+
+  // Fleet details (right section)
+  const flX   = ML + ROUTE_W + 3;
+  const flMax = CW - ROUTE_W - 5;
+  let   fy    = y + 3.5;
+
+  if (data.vehicle_no) {
+    doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...BK);
+    pt(doc, `Vehicle: ${data.vehicle_no}${data.vehicle_type ? '  [' + data.vehicle_type + ']' : ''}`, flX, fy, 'left', flMax);
+    fy += 3.5;
+  }
+  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(...D40);
+  if (data.transport_name)  { pt(doc, `Transport: ${data.transport_name}`,  flX, fy, 'left', flMax); fy += 3; }
+  if (data.driver_name)     { pt(doc, `Driver: ${data.driver_name}${data.driver_mobile ? '  ' + data.driver_mobile : ''}`, flX, fy, 'left', flMax); fy += 3; }
+  if (data.owner_name)      { pt(doc, `Owner: ${data.owner_name}`,          flX, fy, 'left', flMax); }
+
+  y += INFO_H;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TABLE
+  // ═══════════════════════════════════════════════════════════════════════════
+  drawTableHeader();
+
+  const ROW_H      = 6;
+  const bilties    = data.bilties ?? [];
+  const STOP_Y     = PH - 38; // reserve bottom for totals + sigs
+  let   sumPkgs    = 0;
+  let   sumWt      = 0;
+  let   sumAmt     = 0;
 
   bilties.forEach((bilty, idx) => {
-    const even = idx % 2 === 0;
-    doc.setFillColor(even ? 248 : 255, even ? 250 : 255, even ? 255 : 255);
-    doc.rect(ML, y, CW, ROW_H, 'F');
-    doc.setDrawColor(210, 215, 230);
+    // Page break
+    if (y + ROW_H > STOP_Y) {
+      doc.addPage();
+      y = 10;
+      drawTableHeader();
+    }
+
+    // Row background (alternating)
+    if (idx % 2 === 0) {
+      doc.setFillColor(...ALT);
+      doc.rect(ML, y, CW, ROW_H, 'F');
+    }
+    doc.setDrawColor(190, 190, 190).setLineWidth(0.2);
     doc.rect(ML, y, CW, ROW_H, 'S');
 
-    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...BK);
 
-    let cx2 = ML;
+    let cx = ML;
     scaledCols.forEach((col, ci) => {
       const colDef = COLUMNS[ci];
-      const val = colDef.render ? colDef.render(bilty, idx) : '';
-      const tx =
-        col.align === 'right'  ? cx2 + col.w - 1.5 :
-        col.align === 'center' ? cx2 + col.w / 2    : cx2 + 1.5;
+      const val    = colDef.render ? colDef.render(bilty, idx) : '';
+      const tx     =
+        col.align === 'right'  ? cx + col.w - 1.5 :
+        col.align === 'center' ? cx + col.w / 2    : cx + 1.5;
 
-      // Bold GR number
       if (colDef.key === 'gr_no') {
         doc.setFont('helvetica', 'bold');
-        txt(doc, val, tx, y + 4, col.align, col.w - 2);
+        pt(doc, val, tx, y + 4, col.align, col.w - 2);
         doc.setFont('helvetica', 'normal');
       } else {
-        txt(doc, val, tx, y + 4, col.align, col.w - 2);
+        pt(doc, val, tx, y + 4, col.align, col.w - 2);
       }
 
-      // Vertical separator
-      if (cx2 > ML) {
-        doc.setDrawColor(210, 215, 230);
-        doc.line(cx2, y, cx2, y + ROW_H);
-      }
-      cx2 += col.w;
+      if (cx > ML) { doc.setDrawColor(200, 200, 200); doc.line(cx, y, cx, y + ROW_H); }
+      cx += col.w;
     });
 
     sumPkgs += bilty.no_of_pkg    ?? 0;
     sumWt   += bilty.weight       ?? 0;
     sumAmt  += bilty.total_amount ?? 0;
-
     y += ROW_H;
   });
 
-  // ── TOTALS ROW ──────────────────────────────────────────────────────────
+  // ── Totals row ────────────────────────────────────────────────────────────
   const tPkgs = data.total_packages ?? sumPkgs;
   const tWt   = data.total_weight   ?? sumWt;
   const tAmt  = data.total_freight  ?? sumAmt;
+  const TR    = ROW_H + 1;
 
-  doc.setFillColor(...NAVY);
-  doc.rect(ML, y, CW, ROW_H + 1, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(...WHITE);
+  doc.setFillColor(20, 20, 20);
+  doc.rect(ML, y, CW, TR, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...WHT);
+  pt(doc, `Total — ${bilties.length} ${bilties.length === 1 ? 'Bilty' : 'Bilties'}`, ML + 2, y + TR - 2);
 
-  // "TOTAL" label
-  txt(doc, `TOTAL — ${bilties.length} Bilti${bilties.length !== 1 ? 'es' : ''}`, ML + 2, y + 4.5);
-
-  // pkgs / weight / freight right-aligned in their columns
   let totX = ML;
   scaledCols.forEach((col, ci) => {
     const key = COLUMNS[ci].key;
-    let val = '';
+    let val   = '';
     if (key === 'no_of_pkg')    val = String(tPkgs);
     if (key === 'weight')       val = `${tWt.toFixed(1)} kg`;
-    if (key === 'total_amount') val = `${R}${tAmt.toFixed(0)}`;
+    if (key === 'total_amount') val = `${RS} ${tAmt.toFixed(0)}`;
     if (val) {
-      const align = COLUMNS[ci].align;
-      const tx =
-        align === 'right'  ? totX + col.w - 1.5 :
-        align === 'center' ? totX + col.w / 2    : totX + 1.5;
-      txt(doc, val, tx, y + 4.5, align);
+      const al = COLUMNS[ci].align;
+      const tx = al === 'right'  ? totX + col.w - 1.5 :
+                 al === 'center' ? totX + col.w / 2    : totX + 1.5;
+      pt(doc, val, tx, y + TR - 2, al);
     }
     totX += col.w;
   });
+  y += TR + 5;
 
-  y += ROW_H + 1 + 5;
-
-  // ── REMARKS ─────────────────────────────────────────────────────────────
+  // ── Remarks ───────────────────────────────────────────────────────────────
   if (data.remarks) {
-    doc.setFont('helvetica', 'italic').setFontSize(6.5).setTextColor(80, 80, 80);
-    txt(doc, `Remarks: ${data.remarks}`, ML + 2, y, 'left', CW - 4);
-    y += 7;
+    doc.setFont('helvetica', 'italic').setFontSize(6.5).setTextColor(...D80);
+    pt(doc, `Remarks: ${data.remarks}`, ML, y, 'left', CW);
+    y += 6;
   }
 
-  // ── SIGNATURE STRIP ─────────────────────────────────────────────────────
-  const SIG_LABELS = ['Driver Signature', 'Owner Signature', 'Prepared By', 'Authorised Signatory'];
-  const SIG_H = 16;
-  const SIG_W = (CW - (SIG_LABELS.length - 1) * 2) / SIG_LABELS.length;
-
-  SIG_LABELS.forEach((lbl, i) => {
-    const sx = ML + i * (SIG_W + 2);
-    doc.setDrawColor(180, 180, 200);
-    doc.setFillColor(250, 250, 255);
-    doc.rect(sx, y, SIG_W, SIG_H, 'FD');
-    doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 100, 120);
-    txt(doc, lbl, sx + SIG_W / 2, y + SIG_H - 2.5, 'center');
-  });
+  // ── Signature strip — Authorised Signatory only ─────────────────────────
+  const SIG_H = 18;
+  const SW    = 70;
+  const sx    = ML + CW - SW;
+  doc.setDrawColor(...BK).setLineWidth(0.3);
+  doc.rect(sx, y, SW, SIG_H, 'D');
+  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D130);
+  pt(doc, 'Authorised Signatory', sx + SW / 2, y + SIG_H - 3, 'center');
 
   return doc.output('bloburl') as unknown as string;
 }
+
