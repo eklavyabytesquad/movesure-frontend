@@ -129,7 +129,8 @@ export default function BiltyBooks() {
       const res = await apiFetch(endpoint);
       if (res.status === 401) { router.replace('/auth/login'); return; }
       const data = await res.json();
-      setBooks(data.books ?? data ?? []);
+      const raw = data.books ?? data;
+      setBooks(Array.isArray(raw) ? raw : []);
     } catch { setError('Failed to load bilty books.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -322,7 +323,8 @@ export default function BiltyBooks() {
     finally { setSettingPrimaryId(null); }
   }
 
-  const filtered = filterType ? books.filter(b => b.bilty_type === filterType) : books;
+  const safeBooks = Array.isArray(books) ? books : [];
+  const filtered = filterType ? safeBooks.filter(b => b.bilty_type === filterType) : safeBooks;
 
   return (
     <div>
