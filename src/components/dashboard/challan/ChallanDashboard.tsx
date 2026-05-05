@@ -318,6 +318,11 @@ export default function ChallanDashboard() {
         }
       } catch { /* logo is optional */ }
 
+      const printBilties = (challanData.bilties ?? challanBilties).map((b: BiltySummary) => ({
+        ...b,
+        to_city_name: b.to_city_name ?? (b.to_city_id ? cityMap[b.to_city_id] : undefined),
+      }));
+
       const printData: ChallanPrintData = {
         challan_no:       selectedChallan.challan_no ?? undefined,
         challan_date:     selectedChallan.challan_date,
@@ -330,13 +335,10 @@ export default function ChallanDashboard() {
         vehicle_no:       vInfo.vehicle_no,
         vehicle_type:     vInfo.vehicle_type,
         driver_name:      vInfo.driver_name,
-        bilties: (challanData.bilties ?? challanBilties).map((b: BiltySummary) => ({
-          ...b,
-          to_city_name: b.to_city_name ?? (b.to_city_id ? cityMap[b.to_city_id] : undefined),
-        })),
-        total_packages: selectedChallan.total_packages,
-        total_weight:   selectedChallan.total_weight,
-        total_freight:  selectedChallan.total_freight,
+        bilties: printBilties,
+        total_packages: printBilties.reduce((s: number, b: BiltySummary) => s + (b.no_of_pkg ?? 0), 0),
+        total_weight:   printBilties.reduce((s: number, b: BiltySummary) => s + (b.weight ?? b.actual_weight ?? 0), 0),
+        total_freight:  printBilties.reduce((s: number, b: BiltySummary) => s + (b.total_amount ?? 0), 0),
       };
 
       const blobUrl = generateChallanA4LandscapeA(printData, tpl, logoDataUrl);

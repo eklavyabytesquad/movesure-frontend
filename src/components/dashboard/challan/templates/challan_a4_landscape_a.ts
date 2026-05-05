@@ -341,7 +341,7 @@ export function generateChallanA4LandscapeA(
     });
 
     sumPkgs += bilty.no_of_pkg    ?? 0;
-    sumWt   += bilty.weight       ?? 0;
+    sumWt   += bilty.weight ?? bilty.actual_weight ?? 0;
     sumAmt  += bilty.total_amount ?? 0;
     y += ROW_H;
   });
