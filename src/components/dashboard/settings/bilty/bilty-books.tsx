@@ -129,8 +129,9 @@ export default function BiltyBooks() {
       const res = await apiFetch(endpoint);
       if (res.status === 401) { router.replace('/auth/login'); return; }
       const data = await res.json();
-      const raw = data.books ?? data;
-      setBooks(Array.isArray(raw) ? raw : []);
+      // Normalize: API returns { books: [...] } or a bare array
+      const raw: unknown = data.books ?? data;
+      setBooks(Array.isArray(raw) ? (raw as BiltyBook[]) : []);
     } catch { setError('Failed to load bilty books.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
