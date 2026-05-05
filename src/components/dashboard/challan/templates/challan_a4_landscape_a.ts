@@ -65,7 +65,6 @@ export interface ChallanPrintData {
   total_weight?: number;
   total_freight?: number;
 
-  driver_mobile?: string;
   trip_sheet_remarks?: string;
   remarks?: string;
 }
