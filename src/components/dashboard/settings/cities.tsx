@@ -151,7 +151,7 @@ export default function CitiesManager() {
   const branchName = (id: string) => branches.find((b) => b.branch_id === id)?.name ?? id.slice(0, 8) + '…';
 
   const filteredCities = searchQuery
-    ? cities.filter((c) => c.city_name.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_code.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_pin_code.includes(searchQuery))
+    ? cities.filter((c) => c.city_name.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_code?.toLowerCase().includes(searchQuery.toLowerCase()) || c.city_pin_code?.includes(searchQuery))
     : cities;
 
   return (
