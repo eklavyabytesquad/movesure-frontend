@@ -131,6 +131,7 @@ export default function ManualBiltyTable({
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Consignor</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Consignee</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">Route</th>
+                <th className="text-left px-5 py-3 font-semibold text-slate-600">Pvt Mark</th>
                 <th className="text-right px-5 py-3 font-semibold text-slate-600">Pkgs</th>
                 <th className="text-right px-5 py-3 font-semibold text-slate-600">Weight</th>
                 <th className="text-right px-5 py-3 font-semibold text-slate-600">Amount</th>
@@ -161,6 +162,7 @@ export default function ManualBiltyTable({
                       {b.to_city_id ? (cityMap[b.to_city_id] ?? '?') : '—'}
                     </span>
                   </td>
+                  <td className="px-5 py-3 max-w-32 truncate text-slate-500 text-xs">{b.pvt_marks ?? '—'}</td>
                   <td className="px-5 py-3 text-right text-slate-600">{b.no_of_pkg ?? '—'}</td>
                   <td className="px-5 py-3 text-right text-slate-600 whitespace-nowrap">
                     {b.weight != null ? `${b.weight} kg` : '—'}
@@ -168,9 +170,9 @@ export default function ManualBiltyTable({
                   <td className="px-5 py-3 text-right font-bold text-slate-800 whitespace-nowrap">
                     {b.total_amount != null ? `₹${b.total_amount.toLocaleString('en-IN')}` : '—'}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 whitespace-nowrap">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${PAY_CHIP[b.payment_mode] ?? 'bg-slate-100 text-slate-500'}`}>
-                      {b.payment_mode}
+                      {b.payment_mode}{b.delivery_type ? `/${b.delivery_type}` : ''}
                     </span>
                   </td>
                   <td className="px-5 py-3">
