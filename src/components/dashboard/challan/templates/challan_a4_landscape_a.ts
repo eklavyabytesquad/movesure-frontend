@@ -34,6 +34,7 @@ export interface ChallanBiltyRow {
   delivery_type?: string;
   invoice_no?: string;
   invoice_value?: number;
+  e_way_bills?: { ewb_no?: string; valid_upto?: string; vehicle_no?: string }[];
 }
 
 export interface ChallanPrintData {
@@ -54,6 +55,7 @@ export interface ChallanPrintData {
   vehicle_type?: string;
   driver_name?: string;
   driver_mobile?: string;
+  driver_aadhar?: string;
   owner_name?: string;
 
   bilties: ChallanBiltyRow[];
@@ -63,6 +65,8 @@ export interface ChallanPrintData {
   total_weight?: number;
   total_freight?: number;
 
+  driver_mobile?: string;
+  trip_sheet_remarks?: string;
   remarks?: string;
 }
 
@@ -101,15 +105,16 @@ const COLUMNS: ColDef[] = [
   { label: 'S.No',        key: 'serial',        w: 7,  align: 'center', render: (_,i) => String(i+1) },
   { label: 'GR No',       key: 'gr_no',          w: 22, align: 'center', render: r => r.gr_no ?? '' },
   { label: 'Date',        key: 'bilty_date',     w: 14, align: 'center', render: r => r.bilty_date ?? '' },
-  { label: 'Consignor',   key: 'consignor_name', w: 28, align: 'left',   render: r => r.consignor_name ?? '' },
-  { label: 'Consignee',   key: 'consignee_name', w: 28, align: 'left',   render: r => r.consignee_name ?? '' },
-  { label: 'Destination', key: 'to_city_name',   w: 22, align: 'left',   render: r => r.to_city_name ?? '' },
-  { label: 'Contents',    key: 'contain',        w: 24, align: 'left',   render: r => r.contain ?? r.pvt_marks ?? '' },
+  { label: 'Consignor',   key: 'consignor_name', w: 26, align: 'left',   render: r => r.consignor_name ?? '' },
+  { label: 'Consignee',   key: 'consignee_name', w: 26, align: 'left',   render: r => r.consignee_name ?? '' },
+  { label: 'Destination', key: 'to_city_name',   w: 20, align: 'left',   render: r => r.to_city_name ?? '' },
+  { label: 'Contents',    key: 'contain',        w: 22, align: 'left',   render: r => r.contain ?? r.pvt_marks ?? '' },
   { label: 'Pkgs',        key: 'no_of_pkg',      w: 9,  align: 'center', render: r => r.no_of_pkg != null ? String(r.no_of_pkg) : '' },
-  { label: 'Wt(kg)',      key: 'weight',         w: 14, align: 'right',  render: r => r.weight != null ? r.weight.toFixed(1) : '' },
-  { label: 'Freight',     key: 'total_amount',   w: 18, align: 'right',  render: r => r.total_amount != null ? `${RS} ${r.total_amount.toFixed(0)}` : '' },
-  { label: 'Mode',        key: 'payment_mode',   w: 13, align: 'center', render: r => r.payment_mode ?? '' },
-  { label: 'Del.Type',    key: 'delivery_type',  w: 13, align: 'center', render: r => r.delivery_type ?? '' },
+  { label: 'Wt(kg)',      key: 'weight',         w: 13, align: 'right',  render: r => r.weight != null ? r.weight.toFixed(1) : (r.actual_weight != null ? r.actual_weight.toFixed(1) : '') },
+  { label: 'Freight',     key: 'total_amount',   w: 17, align: 'right',  render: r => r.total_amount != null ? `${RS} ${r.total_amount.toFixed(0)}` : '' },
+  { label: 'Mode',        key: 'payment_mode',   w: 12, align: 'center', render: r => r.payment_mode ?? '' },
+  { label: 'Del.Type',    key: 'delivery_type',  w: 12, align: 'center', render: r => r.delivery_type ?? '' },
+  { label: 'EWB No',      key: 'e_way_bills' as keyof ChallanBiltyRow, w: 18, align: 'left', render: r => r.e_way_bills && r.e_way_bills.length > 0 ? (r.e_way_bills[0].ewb_no ?? '') : '' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -227,7 +232,7 @@ export function generateChallanA4LandscapeA(
   // ═══════════════════════════════════════════════════════════════════════════
   // ROUTE + FLEET STRIP
   // ═══════════════════════════════════════════════════════════════════════════
-  const INFO_H = 15;
+  const INFO_H = 22;
   doc.setDrawColor(...BK).setLineWidth(0.3);
   doc.rect(ML, y, CW, INFO_H);
 
@@ -279,13 +284,14 @@ export function generateChallanA4LandscapeA(
   let   fy    = y + 3.5;
 
   if (data.vehicle_no) {
-    doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...BK);
-    pt(doc, `Vehicle: ${data.vehicle_no}${data.vehicle_type ? '  [' + data.vehicle_type + ']' : ''}`, flX, fy, 'left', flMax);
-    fy += 3.5;
+    doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...BK);
+    pt(doc, `${data.vehicle_no}${data.vehicle_type ? '  [' + data.vehicle_type + ']' : ''}`, flX, fy, 'left', flMax);
+    fy += 6;
   }
   doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(...D40);
-  if (data.transport_name)  { pt(doc, `Transport: ${data.transport_name}`,  flX, fy, 'left', flMax); fy += 3; }
-  if (data.driver_name)     { pt(doc, `Driver: ${data.driver_name}${data.driver_mobile ? '  ' + data.driver_mobile : ''}`, flX, fy, 'left', flMax); fy += 3; }
+  if (data.transport_name)  { pt(doc, `Transport: ${data.transport_name}`,  flX, fy, 'left', flMax); fy += 3.5; }
+  if (data.driver_name)     { pt(doc, `Driver: ${data.driver_name}${data.driver_mobile ? '  ' + data.driver_mobile : ''}`, flX, fy, 'left', flMax); fy += 3.5; }
+  if (data.driver_aadhar)   { pt(doc, `Aadhaar: ${data.driver_aadhar}`,     flX, fy, 'left', flMax); fy += 3.5; }
   if (data.owner_name)      { pt(doc, `Owner: ${data.owner_name}`,          flX, fy, 'left', flMax); }
 
   y += INFO_H;
@@ -375,10 +381,19 @@ export function generateChallanA4LandscapeA(
   y += TR + 5;
 
   // ── Remarks ───────────────────────────────────────────────────────────────
-  if (data.remarks) {
+  if (data.remarks || data.trip_sheet_remarks) {
+    doc.setDrawColor(...BK).setLineWidth(0.2);
+    doc.setFillColor(248, 248, 248);
+    const remarksLines: string[] = [];
+    if (data.remarks)             remarksLines.push(`Challan Remarks: ${data.remarks}`);
+    if (data.trip_sheet_remarks)  remarksLines.push(`Trip Sheet Remarks: ${data.trip_sheet_remarks}`);
+    const RH = remarksLines.length * 5 + 4;
+    doc.rect(ML, y, CW, RH, 'FD');
     doc.setFont('helvetica', 'italic').setFontSize(6.5).setTextColor(...D80);
-    pt(doc, `Remarks: ${data.remarks}`, ML, y, 'left', CW);
-    y += 6;
+    remarksLines.forEach((line, i) => {
+      pt(doc, line, ML + 2, y + 4 + i * 5, 'left', CW - 4);
+    });
+    y += RH + 3;
   }
 
   // ── Signature strip — Authorised Signatory only ─────────────────────────

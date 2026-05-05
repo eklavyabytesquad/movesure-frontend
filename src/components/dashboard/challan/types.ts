@@ -23,6 +23,12 @@ export interface TripSheetSummary {
   vehicle_info?: { vehicle_no?: string; driver_name?: string } | null;
 }
 
+export interface EWayBill {
+  ewb_no?: string;
+  valid_upto?: string;
+  vehicle_no?: string;
+}
+
 export interface BiltySummary {
   bilty_id: string;
   gr_no: string;
@@ -41,6 +47,7 @@ export interface BiltySummary {
   contain?: string;           // API field: contain (goods description)
   to_city_id?: string;
   to_city_name?: string;      // resolved client-side from cityMap
+  e_way_bills?: EWayBill[];   // array of EWB objects
 }
 
 export type ChallanStatus = 'DRAFT' | 'OPEN' | 'DISPATCHED' | 'ARRIVED_HUB' | 'CLOSED';
@@ -57,6 +64,11 @@ export interface Challan {
   to_branch_id: string | null;
   from_branch_id: string | null;
   trip_sheet_id: string | null;
+  fleet_id?: string | null;
+  driver_id?: string | null;
+  owner_id?: string | null;
+  conductor_id?: string | null;
+  remarks?: string | null;
   bilty_count?: number;
   total_bilty_count?: number;
   total_freight?: number;

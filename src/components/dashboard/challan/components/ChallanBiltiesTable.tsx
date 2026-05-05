@@ -195,6 +195,7 @@ export default function ChallanBiltiesTable({
                 <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-gray-500 whitespace-nowrap">Pkgs</th>
                 <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-gray-500 whitespace-nowrap">Weight</th>
                 <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-gray-500 whitespace-nowrap">Amount</th>
+                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-500 whitespace-nowrap">EWB No</th>
                 {isEditable && canUpdate && (
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-gray-500">Action</th>
                 )}
@@ -231,6 +232,11 @@ export default function ChallanBiltiesTable({
                     </td>
                     <td className="px-3 py-2.5 text-xs font-bold text-right text-gray-800 whitespace-nowrap">
                       {b.total_amount != null ? `₹${b.total_amount.toLocaleString('en-IN')}` : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                      {b.e_way_bills && b.e_way_bills.length > 0
+                        ? b.e_way_bills.map(e => e.ewb_no).filter(Boolean).join(', ')
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     {isEditable && canUpdate && (
                       <td className="px-3 py-2.5 text-right">
@@ -271,6 +277,7 @@ export default function ChallanBiltiesTable({
                   <td className="px-3 py-2 text-xs font-bold text-right text-gray-800 whitespace-nowrap">
                     ₹{totalAmt.toLocaleString('en-IN')}
                   </td>
+                  <td />
                   {isEditable && canUpdate ? <td /> : null}
                 </tr>
               </tfoot>

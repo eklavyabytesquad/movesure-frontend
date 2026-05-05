@@ -212,6 +212,15 @@ export default function ManualBiltyPage() {
 
   function openEdit(b: ManualBilty) {
     setEditItem(b);
+    // Populate EWB numbers from existing data — prefer e_way_bills array, fallback to ewb_no
+    const existingEwbs: string[] =
+      (b.e_way_bills ?? []).map(e => e.ewb_no).filter(Boolean) as string[];
+    if (existingEwbs.length === 0 && b.ewb_no) existingEwbs.push(b.ewb_no);
+    setEwbNumbers(existingEwbs);
+    // Always show EWB section in edit mode when bilty has EWB data
+    if (existingEwbs.length > 0) {
+      setVis(v => ({ ...v, show_eway_bill: true }));
+    }
     setForm({
       gr_no:            b.gr_no ?? '',
       book_id:          '',
@@ -331,10 +340,8 @@ export default function ManualBiltyPage() {
     if (form.invoice_no)       body.invoice_no       = form.invoice_no;
     if (form.invoice_value)    body.invoice_value    = Number(form.invoice_value);
     if (form.pvt_marks)        body.pvt_marks        = form.pvt_marks;
-    if (form.ewb_no)           body.ewb_no           = form.ewb_no;
     const validEwbs = ewbNumbers.filter(n => n.trim());
-    if (validEwbs.length > 0)  body.ewb_no           = validEwbs[0];
-    if (validEwbs.length > 1)  body.e_way_bills      = validEwbs.map(ewb_no => ({ ewb_no }));
+    if (validEwbs.length > 0)  body.e_way_bills = validEwbs.map(ewb_no => ({ ewb_no }));
     if (form.no_of_pkg)        body.no_of_pkg        = Number(form.no_of_pkg);
     if (form.weight)           body.weight           = Number(form.weight);
     if (form.remark)           body.remark           = form.remark;

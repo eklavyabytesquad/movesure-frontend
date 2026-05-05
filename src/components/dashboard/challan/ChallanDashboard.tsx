@@ -32,6 +32,7 @@ const DEFAULT_FORM: ChallanFormState = {
   transport_name: '', vehicle_no: '',
   challan_date: new Date().toISOString().split('T')[0],
   is_primary: false,
+  fleet_id: '', driver_id: '', remarks: '',
 };
 
 export default function ChallanDashboard() {
@@ -258,6 +259,9 @@ export default function ChallanDashboard() {
       if (form.from_branch_id) body.from_branch_id = form.from_branch_id;
       if (form.transport_name) body.transport_name = form.transport_name;
       if (form.vehicle_no)     body.vehicle_info   = { vehicle_no: form.vehicle_no };
+      if (form.fleet_id)       body.fleet_id       = form.fleet_id;
+      if (form.driver_id)      body.driver_id      = form.driver_id;
+      if (form.remarks)        body.remarks        = form.remarks;
 
       const res  = await apiFetch('/v1/challan', { method: 'POST', body: JSON.stringify(body) });
       const data = await res.json();
@@ -297,11 +301,33 @@ export default function ChallanDashboard() {
 
       const fromBranch = branches.find(b => b.branch_id === selectedChallan.from_branch_id);
       const toBranch   = branches.find(b => b.branch_id === selectedChallan.to_branch_id);
-      const vInfo      = selectedChallan.vehicle_info ?? {};
 
       // Resolve branch cities from cityMap
       const fromBranchCity = fromBranch?.city_id ? cityMap[fromBranch.city_id] : undefined;
       const toBranchCity   = toBranch?.city_id   ? cityMap[toBranch.city_id]   : undefined;
+
+      // Fetch fleet vehicle, driver, and trip sheet remarks in parallel (all optional)
+      const fleetId      = challanData.fleet_id   ?? selectedChallan.fleet_id;
+      const driverId     = challanData.driver_id  ?? selectedChallan.driver_id;
+      const tripSheetId  = challanData.trip_sheet_id ?? selectedChallan.trip_sheet_id;
+
+      const [fleetRes, driverRes, tripRes] = await Promise.all([
+        fleetId    ? apiFetch(`/v1/fleet/${fleetId}`)                           : Promise.resolve(null),
+        driverId   ? apiFetch(`/v1/fleet/staff/${driverId}`)                    : Promise.resolve(null),
+        tripSheetId ? apiFetch(`/v1/challan/trip-sheet/${tripSheetId}`)         : Promise.resolve(null),
+      ]);
+
+      const fleetDetail  = fleetRes   && fleetRes.ok   ? await fleetRes.json()   : null;
+      const driverDetail = driverRes  && driverRes.ok  ? await driverRes.json()  : null;
+      const tripDetail   = tripRes    && tripRes.ok    ? await tripRes.json()    : null;
+
+      // Resolve vehicle info — prefer fleet FK, fallback to vehicle_info JSONB
+      const vInfo       = selectedChallan.vehicle_info ?? {};
+      const vehicleNo   = fleetDetail?.vehicle_no   ?? vInfo.vehicle_no;
+      const vehicleType = fleetDetail?.vehicle_type ?? fleetDetail?.truck_type ?? vInfo.vehicle_type;
+      const driverName  = driverDetail?.name   ?? fleetDetail?.current_driver?.name   ?? vInfo.driver_name;
+      const driverMobile = driverDetail?.mobile ?? fleetDetail?.current_driver?.mobile ?? undefined;
+      const driverAadhar = driverDetail?.aadhar_no ?? undefined;
 
       // Load company logo (optional — silently ignored if unavailable)
       let logoDataUrl: string | undefined;
@@ -318,23 +344,45 @@ export default function ChallanDashboard() {
         }
       } catch { /* logo is optional */ }
 
-      const printBilties = (challanData.bilties ?? challanBilties).map((b: BiltySummary) => ({
+      const rawBilties: BiltySummary[] = challanData.bilties ?? challanBilties;
+
+      // The challan detail API does not include e_way_bills in embedded bilties.
+      // Fetch each bilty individually in parallel to get the full e_way_bills array.
+      const ewbMap: Record<string, BiltySummary['e_way_bills']> = {};
+      await Promise.allSettled(
+        rawBilties.map(async (b: BiltySummary) => {
+          try {
+            const r = await apiFetch(`/v1/bilty/${b.bilty_id}`);
+            if (r.ok) {
+              const d = await r.json();
+              if (d.e_way_bills) ewbMap[b.bilty_id] = d.e_way_bills;
+            }
+          } catch { /* non-fatal — row will just show empty EWB */ }
+        })
+      );
+
+      const printBilties = rawBilties.map((b: BiltySummary) => ({
         ...b,
+        e_way_bills: ewbMap[b.bilty_id] ?? b.e_way_bills,
         to_city_name: b.to_city_name ?? (b.to_city_id ? cityMap[b.to_city_id] : undefined),
       }));
 
       const printData: ChallanPrintData = {
-        challan_no:       selectedChallan.challan_no ?? undefined,
-        challan_date:     selectedChallan.challan_date,
-        challan_status:   selectedChallan.challan_status ?? selectedChallan.status,
-        from_branch_name: fromBranch?.name,
-        from_branch_city: fromBranchCity,
-        to_branch_name:   toBranch?.name,
-        to_branch_city:   toBranchCity,
-        transport_name:   selectedChallan.transport_name ?? undefined,
-        vehicle_no:       vInfo.vehicle_no,
-        vehicle_type:     vInfo.vehicle_type,
-        driver_name:      vInfo.driver_name,
+        challan_no:          selectedChallan.challan_no ?? undefined,
+        challan_date:        selectedChallan.challan_date,
+        challan_status:      selectedChallan.challan_status ?? selectedChallan.status,
+        from_branch_name:    fromBranch?.name,
+        from_branch_city:    fromBranchCity,
+        to_branch_name:      toBranch?.name,
+        to_branch_city:      toBranchCity,
+        transport_name:      selectedChallan.transport_name ?? undefined,
+        vehicle_no:          vehicleNo,
+        vehicle_type:        vehicleType,
+        driver_name:         driverName,
+        driver_mobile:       driverMobile,
+        driver_aadhar:       driverAadhar,
+        remarks:             challanData.remarks ?? selectedChallan.remarks ?? undefined,
+        trip_sheet_remarks:  tripDetail?.remarks ?? undefined,
         bilties: printBilties,
         total_packages: printBilties.reduce((s: number, b: BiltySummary) => s + (b.no_of_pkg ?? 0), 0),
         total_weight:   printBilties.reduce((s: number, b: BiltySummary) => s + (b.weight ?? b.actual_weight ?? 0), 0),

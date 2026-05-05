@@ -30,6 +30,7 @@ export interface ManualBilty {
   invoice_value?: number | null;
   pvt_marks?: string | null;
   ewb_no?: string | null;
+  e_way_bills?: { ewb_no: string; valid_upto?: string; vehicle_no?: string }[] | null;
   remark?: string | null;
   status: string;
   consignor_id?: string | null;
