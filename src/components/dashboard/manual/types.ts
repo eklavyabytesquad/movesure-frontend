@@ -41,6 +41,9 @@ export interface ManualBilty {
   consignee_mobile?: string | null;
   consignor_gstin?: string | null;
   consignee_gstin?: string | null;
+  consignor_mobile_numbers?: string[] | null;
+  consignee_mobile_numbers?: string[] | null;
+  transport_mobile_numbers?: string[] | null;
   book_id?: string | null;
   book_name?: string | null;
 }

@@ -41,10 +41,11 @@ export default function ModalPartyRow({
             placeholder="15-digit GSTIN" className={CLS} />
         </div>
         <div>
-          <label className={LABEL}>Mobile</label>
+          <label className={LABEL}>Mobile <span className="text-slate-300">(comma-separated for multiple)</span></label>
           <input type="text" value={mobile}
             onChange={e => onMobileChange(e.target.value)}
-            placeholder="Mobile no." className={CLS} />
+            placeholder="e.g. 1234567890,9876543210" className={CLS} />
+          <p className="mt-0.5 text-[9px] text-slate-400">Add multiple numbers separated by commas</p>
         </div>
       </div>
     </div>

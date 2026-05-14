@@ -201,9 +201,10 @@ Authorization: Bearer <token>
   "gr_no":           "1234",
 
   "consignor_name":  "Mehta Traders",
-  "consignor_mobile": "9876543210",
+  "consignor_mobile_numbers": "9876543210,8765432101",
 
   "consignee_name":  "Patel Mart",
+  "consignee_mobile_numbers": "9123456789,9876543210",
   "from_city_id":    "<uuid>",
   "to_city_id":      "<uuid>",
 
@@ -224,6 +225,43 @@ Authorization: Bearer <token>
 - Do NOT send `book_id` — leave it out entirely (it will be stored as `null`)
 - The GR number can be any string: `"1234"`, `"STN/99"`, `"HAND-01"` — whatever is written on the paper
 - All other fields (charges, consignor, consignee, route) work exactly the same as a REGULAR bilty
+
+---
+
+## Multiple Mobile Numbers
+
+Both `consignor_mobile_numbers` and `consignee_mobile_numbers` fields support **multiple phone numbers** using comma-separated format or as an array:
+
+### In the Manual Bilty Form
+
+Enter multiple numbers separated by commas:
+```
+1234567890,8765432101,9876543210
+```
+
+The system will:
+1. **Auto-create consignor/consignee** if the party doesn't exist in master, with all numbers stored in the master's `mobile_numbers` field
+2. **Save the bilty** with the comma-separated string as `consignor_mobile_numbers` or `consignee_mobile_numbers`
+
+### In the API
+
+Send as comma-separated string:
+```json
+{
+  "consignor_mobile_numbers": "1234567890,8765432101",
+  "consignee_mobile_numbers": "9876543210,9123456789"
+}
+```
+
+Or as an array:
+```json
+{
+  "consignor_mobile_numbers": ["1234567890", "8765432101"],
+  "consignee_mobile_numbers": ["9876543210", "9123456789"]
+}
+```
+
+The backend will **automatically trim whitespace** and store as JSON array. When the consignor/consignee is auto-created, the master's `mobile_numbers` field is set with the parsed values.
 
 ---
 

@@ -36,10 +36,28 @@ All operations are automatically scoped to the caller's `company_id` and `branch
 | `city` | string | |
 | `state` | string | |
 | `pincode` | string | |
-| `mobile` | string | |
-| `alternate_mobile` | string | |
+| `mobile` | string | Single mobile number (max 15 chars) |
+| `alternate_mobile` | string | Single alternate mobile (max 15 chars) |
+| `mobile_numbers` | array of strings OR comma-separated string | Multiple phone numbers. Can be sent as: `["1234123415", "1231132415"]` (array) or `"1234123415,1231132415"` (comma-separated string). Whitespace is automatically trimmed. Stored as JSON array. |
 | `email` | string | |
 | `metadata` | object | free-form JSON |
+
+**Example — multiple mobile numbers:**
+```json
+POST /v1/bilty-setting/consignors
+{
+  "consignor_name": "ABC Logistics",
+  "mobile_numbers": "1234123415,1231132415"
+}
+```
+
+```json
+POST /v1/bilty-setting/consignors
+{
+  "consignor_name": "ABC Logistics",
+  "mobile_numbers": ["1234123415", "1231132415"]
+}
+```
 
 ---
 
@@ -53,7 +71,23 @@ All operations are automatically scoped to the caller's `company_id` and `branch
 | `PATCH` | `/v1/bilty-setting/consignees/{consignee_id}` | Update consignee fields |
 | `DELETE` | `/v1/bilty-setting/consignees/{consignee_id}` | Soft-delete |
 
-Fields are identical to Consignor — use `consignee_name` as the name field.
+Fields are identical to Consignor — use `consignee_name` as the name field. Supports the same `mobile_numbers` field for storing multiple phone numbers:
+
+| Field | Type | Notes |
+|---|---|---|
+| `consignee_name` | string (required) | min 2 chars |
+| `gstin` | string | max 15 chars |
+| `pan` | string | max 10 chars |
+| `aadhar` | string | max 12 chars |
+| `address` | string | |
+| `city` | string | |
+| `state` | string | |
+| `pincode` | string | |
+| `mobile` | string | Single mobile number (max 15 chars) |
+| `alternate_mobile` | string | Single alternate mobile (max 15 chars) |
+| `mobile_numbers` | array of strings OR comma-separated string | Multiple phone numbers. Can be sent as: `["1234123415", "1231132415"]` (array) or `"1234123415,1231132415"` (comma-separated string). Whitespace is automatically trimmed. Stored as JSON array. |
+| `email` | string | |
+| `metadata` | object | free-form JSON |
 
 ---
 
@@ -352,6 +386,25 @@ POST /v1/bilty  { gr_no: "MANUAL-001", bilty_type: "MANUAL", ... }
 | `discount_id` | UUID | FK to `bilty_discount`. Set when a discount is applied. |
 | `discount_percentage` | number 0-100 | Snapshot of the discount percentage at time of creation. |
 | `discount_amount` | number ≥ 0 | Computed discount amount = `total_amount * discount_percentage / 100` (capped). |
+| `consignor_mobile_numbers` | array of strings OR comma-separated string | Multiple phone numbers for consignor. Can be sent as: `["1234123415", "1231132415"]` (array) or `"1234123415,1231132415"` (comma-separated string). Whitespace is automatically trimmed. Stored as JSON array. |
+| `consignee_mobile_numbers` | array of strings OR comma-separated string | Multiple phone numbers for consignee. Can be sent as: `["1234123415", "1231132415"]` (array) or `"1234123415,1231132415"` (comma-separated string). Whitespace is automatically trimmed. Stored as JSON array. |
+| `transport_mobile_numbers` | array of strings OR comma-separated string | Multiple phone numbers for transport/vehicle. Can be sent as: `["1234123415", "1231132415"]` (array) or `"1234123415,1231132415"` (comma-separated string). Whitespace is automatically trimmed. Stored as JSON array. |
+
+**Example — bilty with multiple mobile numbers:**
+```json
+POST /v1/bilty
+{
+  "bilty_type": "MANUAL",
+  "gr_no": "1702",
+  "bilty_date": "2026-05-14",
+  "consignor_name": "ABC Logistics",
+  "consignor_mobile_numbers": "1321321111,1234123445",
+  "consignee_name": "XYZ Traders",
+  "consignee_mobile_numbers": ["9044396743", "9876543210"],
+  "transport_name": "Express Transport",
+  "transport_mobile_numbers": "9111222333,9444555666"
+}
+```
 
 ---
 DRAFT
@@ -430,3 +483,241 @@ app/
     ├── bilty_setting.py    ← FastAPI router (/v1/bilty-setting/...)
     └── bilty.py            ← FastAPI router (/v1/bilty/...)
 ```
+
+{
+"message": "Bilty created.",
+"bilty": {
+"bilty_id": "cac7c067-8f31-446a-a61e-5e4cd7c06ebd",
+"company_id": "815fcdb9-c36b-4288-9ed3-8210eaf40332",
+"branch_id": "0c15b4c4-3d14-4c68-af43-c8ce7e738fd7",
+"gr_no": "1702",
+"book_id": "b287ccf9-86f1-4f81-a5f2-fb2be3f05233",
+"bilty_type": "MANUAL",
+"bilty_date": "2026-05-14",
+"consignor_id": "6502f8cd-57fd-474e-81e5-a67fc2e5b270",
+"consignor_name": "MALA RAMENY SONA",
+"consignor_gstin": "06AALPJ5476A1ZT",
+"consignor_mobile": null,
+"consignee_id": "c2cefc18-e9ae-4c95-a5d0-9e072d22a5ff",
+"consignee_name": "NEW UPPAR DRESSES",
+"consignee_gstin": "09AHXPG0610L1Z3",
+"consignee_mobile": null,
+"transport_id": "3be455ff-997d-4324-b322-7dad13fa892e",
+"transport_name": "SS TRANSPORT CORPORATION",
+"transport_gstin": null,
+"transport_mobile": null,
+"from_city_id": "ce216191-e55b-440b-ae40-e2d70e494b3e",
+"to_city_id": "f0162aa1-7bf6-4c7a-894a-93d0845027c7",
+"delivery_type": "GODOWN",
+"payment_mode": "TO-PAY",
+"contain": null,
+"invoice_no": null,
+"invoice_value": 0.0,
+"invoice_date": null,
+"e_way_bills": [],
+"document_number": null,
+"no_of_pkg": 0,
+"weight": null,
+"rate": null,
+"pvt_marks": null,
+"freight_amount": 0.0,
+"labour_rate": null,
+"labour_charge": 0.0,
+"bill_charge": 0.0,
+"toll_charge": 0.0,
+"dd_charge": 0.0,
+"pf_charge": 0.0,
+"other_charge": 0.0,
+"total_amount": 0.0,
+"pdf_url": null,
+"saving_option": "SAVE",
+"status": "SAVED",
+"is_dispatched": false,
+"dispatched_at": null,
+"dispatched_challan_no": null,
+"dispatched_by": null,
+"is_reached_hub": false,
+"reached_hub_at": null,
+"reached_hub_by": null,
+"is_at_godown": false,
+"at_godown_at": null,
+"at_godown_by": null,
+"is_out_for_delivery": false,
+"out_for_delivery_at": null,
+"out_for_delivery_by": null,
+"is_delivered": false,
+"delivered_at": null,
+"delivered_by": null,
+"delivery_remark": null,
+"pod_image_url": null,
+"is_active": true,
+"deleted_at": null,
+"deleted_by": null,
+"deletion_reason": null,
+"tracking_meta": {},
+"remark": null,
+"metadata": {},
+"created_at": "2026-05-14T06:05:09.138135+00:00",
+"updated_at": "2026-05-14T06:05:09.138135+00:00",
+"created_by": "ab10fcbb-eb8e-434a-8272-ca1991bbfaed",
+"updated_by": "ab10fcbb-eb8e-434a-8272-ca1991bbfaed",
+"actual_weight": null,
+"template_id": "b40dc6d5-61ba-449f-95d1-af69b110c5f7",
+"local_charge": 0.0,
+"discount_id": null,
+"discount_percentage": 0.0,
+"discount_amount": 0.0,
+"challan_id": null,
+"challan_branch_id": null,
+"trip_sheet_id": null,
+"challan_assigned_at": null,
+"challan_assigned_by": null,
+"kaat_rate": 0,
+"kaat_rate_type": null,
+"kaat_weight_charged": 0,
+"kaat_base_amount": 0,
+"kaat_receiving_slip_charge": 0,
+"kaat_bilty_charge": 0,
+"kaat_labour_rate": 0,
+"kaat_labour_rate_type": null,
+"kaat_labour_charge": 0,
+"kaat_other_charges": [],
+"kaat_other_charges_total": 0,
+"kaat_amount": 0,
+"real_dd_charge": 0,
+"transit_profit": 0,
+"crossing_proof_type": null,
+"crossing_proof_ref": null,
+"consignor_mobile_numbers": [
+"1234132415",
+"1234123412"
+],
+"consignee_mobile_numbers": [
+"9044396743",
+"1234123414"
+],
+"transport_mobile_numbers": null
+}
+}
+2026-05-14 06:05:09 | INFO     | uvicorn.access | 10.0.1.3:33852 - "POST /v1/bilty HTTP/1.1" 201
+2026-05-14 06:05:09 | INFO     | httpx | HTTP Request: POST http://supabasekong-a5tmxn7eqgoivxs2a9gp37lz.46.202.162.119.sslip.io/rest/v1/logs_request_log?columns=%22user_id%22%2C%22method%22%2C%22status_code%22%2C%22duration_ms%22%2C%22ip_address%22%2C%22user_agent%22%2C%22query_params%22%2C%22path%22%2C%22request_body%22%2C%22branch_id%22%2C%22company_id%22%2C%22correlation_id%22%2C%22client_type%22%2C%22error_message%22%2C%22session_id%22 "HTTP/1.1 201 Created"
+2026-05-14 06:05:09 | INFO     | movesure | → [16f07615] GET /v1/bilty | client: browser_chrome | body: 
+2026-05-14 06:05:09 | INFO     | httpx | HTTP Request: GET http://supabasekong-a5tmxn7eqgoivxs2a9gp37lz.46.202.162.119.sslip.io/rest/v1/bilty?select=%2A&company_id=eq.815fcdb9-c36b-4288-9ed3-8210eaf40332&branch_id=eq.0c15b4c4-3d14-4c68-af43-c8ce7e738fd7&is_active=eq.True&order=bilty_date.desc%2Ccreated_at.desc&limit=500&offset=0&bilty_type=eq.MANUAL "HTTP/1.1 200 OK"
+2026-05-14 06:05:09 | INFO     | movesure | ← [16f07615] GET /v1/bilty | status: 200 | 33 ms
+RESPONSE:
+{
+"count": 6,
+"bilties": [
+{
+"bilty_id": "cac7c067-8f31-446a-a61e-5e4cd7c06ebd",
+"company_id": "815fcdb9-c36b-4288-9ed3-8210eaf40332",
+"branch_id": "0c15b4c4-3d14-4c68-af43-c8ce7e738fd7",
+"gr_no": "1702",
+"book_id": "b287ccf9-86f1-4f81-a5f2-fb2be3f05233",
+"bilty_type": "MANUAL",
+"bilty_date": "2026-05-14",
+"consignor_id": "6502f8cd-57fd-474e-81e5-a67fc2e5b270",
+"consignor_name": "MALA RAMENY SONA",
+"consignor_gstin": "06AALPJ5476A1ZT",
+"consignor_mobile": null,
+"consignee_id": "c2cefc18-e9ae-4c95-a5d0-9e072d22a5ff",
+"consignee_name": "NEW UPPAR DRESSES",
+"consignee_gstin": "09AHXPG0610L1Z3",
+"consignee_mobile": null,
+"transport_id": "3be455ff-997d-4324-b322-7dad13fa892e",
+"transport_name": "SS TRANSPORT CORPORATION",
+"transport_gstin": null,
+"transport_mobile": null,
+"from_city_id": "ce216191-e55b-440b-ae40-e2d70e494b3e",
+"to_city_id": "f0162aa1-7bf6-4c7a-894a-93d0845027c7",
+"delivery_type": "GODOWN",
+"payment_mode": "TO-PAY",
+"contain": null,
+"invoice_no": null,
+"invoice_value": 0.0,
+"invoice_date": null,
+"e_way_bills": [],
+"document_number": null,
+"no_of_pkg": 0,
+"weight": null,
+"rate": null,
+"pvt_marks": null,
+"freight_amount": 0.0,
+"labour_rate": null,
+"labour_charge": 0.0,
+"bill_charge": 0.0,
+"toll_charge": 0.0,
+"dd_charge": 0.0,
+"pf_charge": 0.0,
+"other_charge": 0.0,
+"total_amount": 0.0,
+"pdf_url": null,
+"saving_option": "SAVE",
+"status": "SAVED",
+"is_dispatched": false,
+"dispatched_at": null,
+"dispatched_challan_no": null,
+"dispatched_by": null,
+"is_reached_hub": false,
+"reached_hub_at": null,
+"reached_hub_by": null,
+"is_at_godown": false,
+"at_godown_at": null,
+"at_godown_by": null,
+"is_out_for_delivery": false,
+"out_for_delivery_at": null,
+"out_for_delivery_by": null,
+"is_delivered": false,
+"delivered_at": null,
+"delivered_by": null,
+"delivery_remark": null,
+"pod_image_url": null,
+"is_active": true,
+"deleted_at": null,
+"deleted_by": null,
+"deletion_reason": null,
+"tracking_meta": {},
+"remark": null,
+"metadata": {},
+"created_at": "2026-05-14T06:05:09.138135+00:00",
+"updated_at": "2026-05-14T06:05:09.138135+00:00",
+"created_by": "ab10fcbb-eb8e-434a-8272-ca1991bbfaed",
+"updated_by": "ab10fcbb-eb8e-434a-8272-ca1991bbfaed",
+"actual_weight": null,
+"template_id": "b40dc6d5-61ba-449f-95d1-af69b110c5f7",
+"local_charge": 0.0,
+"discount_id": null,
+"discount_percentage": 0.0,
+"discount_amount": 0.0,
+"challan_id": null,
+"challan_branch_id": null,
+"trip_sheet_id": null,
+"challan_assigned_at": null,
+"challan_assigned_by": null,
+"kaat_rate": 0,
+"kaat_rate_type": null,
+"kaat_weight_charged": 0,
+"kaat_base_amount": 0,
+"kaat_receiving_slip_charge": 0,
+"kaat_bilty_charge": 0,
+"kaat_labour_rate": 0,
+"kaat_labour_rate_type": null,
+"kaat_labour_charge": 0,
+"kaat_other_charges": [],
+"kaat_other_charges_total": 0,
+"kaat_amount": 0,
+"real_dd_charge": 0,
+"transit_profit": 0,
+"crossing_proof_type": null,
+"crossing_proof_ref": null,
+"consignor_mobile_numbers": [
+"1234132415",
+"1234123412"
+],
+"consignee_mobile_numbers": [
+"9044396743",
+"1234123414"
+],
+"transport_mobile_numbers": null
+},
+IT IS GIVIGN AS THIS OUTPUT WHEN FETCH WHEN CLCIK ON EDIT ON MANUAL BILTY EDIT .., CAN YOU SHOW THE NUMBER BY THIS JSON FORMAT PROPERLY IN THE INPUT ..IN COMMA ..SHOW THE NUMBERS PROPERLY IN THE UI , CURRENYLY I AM NOT ABLE TO DO IT 

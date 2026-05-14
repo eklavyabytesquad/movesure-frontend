@@ -217,6 +217,15 @@ export default function ManualBiltyPage() {
       (b.e_way_bills ?? []).map(e => e.ewb_no).filter(Boolean) as string[];
     if (existingEwbs.length === 0 && b.ewb_no) existingEwbs.push(b.ewb_no);
     setEwbNumbers(existingEwbs);
+
+    // Convert mobile number arrays to comma-separated strings for form display
+    const consignorMobileStr = Array.isArray(b.consignor_mobile_numbers)
+      ? b.consignor_mobile_numbers.join(',')
+      : (b.consignor_mobile ?? '');
+    const consigneeMobileStr = Array.isArray(b.consignee_mobile_numbers)
+      ? b.consignee_mobile_numbers.join(',')
+      : (b.consignee_mobile ?? '');
+
     setForm({
       gr_no:            b.gr_no ?? '',
       book_id:          '',
@@ -224,11 +233,11 @@ export default function ManualBiltyPage() {
       consignor_id:     b.consignor_id    ?? '',
       consignor_name:   b.consignor_name  ?? '',
       consignor_gstin:  b.consignor_gstin  ?? '',
-      consignor_mobile: b.consignor_mobile ?? '',
+      consignor_mobile: consignorMobileStr,
       consignee_id:     b.consignee_id    ?? '',
       consignee_name:   b.consignee_name  ?? '',
       consignee_gstin:  b.consignee_gstin  ?? '',
-      consignee_mobile: b.consignee_mobile ?? '',
+      consignee_mobile: consigneeMobileStr,
       transport_id:     b.transport_id    ?? '',
       transport_name:   b.transport_name  ?? '',
       from_city_id:     b.from_city_id    ?? '',
@@ -276,13 +285,17 @@ export default function ManualBiltyPage() {
     let resolvedConsignorId = form.consignor_id;
     if (!resolvedConsignorId && form.consignor_name.trim() && navigator.onLine) {
       try {
+        const crPayload: Record<string, unknown> = {
+          consignor_name: form.consignor_name.trim(),
+        };
+        if (form.consignor_gstin) crPayload.gstin = form.consignor_gstin;
+        if (form.consignor_mobile) {
+          // Send as comma-separated string (API will handle parsing)
+          crPayload.mobile_numbers = form.consignor_mobile;
+        }
         const cr = await apiFetch('/v1/bilty-setting/consignors', {
           method: 'POST',
-          body: JSON.stringify({
-            consignor_name: form.consignor_name.trim(),
-            ...(form.consignor_gstin  ? { gstin:  form.consignor_gstin  } : {}),
-            ...(form.consignor_mobile ? { mobile: form.consignor_mobile } : {}),
-          }),
+          body: JSON.stringify(crPayload),
         });
         if (cr.ok) {
           const cd = await cr.json();
@@ -295,13 +308,17 @@ export default function ManualBiltyPage() {
     let resolvedConsigneeId = form.consignee_id;
     if (!resolvedConsigneeId && form.consignee_name.trim() && navigator.onLine) {
       try {
+        const cePayload: Record<string, unknown> = {
+          consignee_name: form.consignee_name.trim(),
+        };
+        if (form.consignee_gstin) cePayload.gstin = form.consignee_gstin;
+        if (form.consignee_mobile) {
+          // Send as comma-separated string (API will handle parsing)
+          cePayload.mobile_numbers = form.consignee_mobile;
+        }
         const cr = await apiFetch('/v1/bilty-setting/consignees', {
           method: 'POST',
-          body: JSON.stringify({
-            consignee_name: form.consignee_name.trim(),
-            ...(form.consignee_gstin  ? { gstin:  form.consignee_gstin  } : {}),
-            ...(form.consignee_mobile ? { mobile: form.consignee_mobile } : {}),
-          }),
+          body: JSON.stringify(cePayload),
         });
         if (cr.ok) {
           const cd = await cr.json();
@@ -323,11 +340,11 @@ export default function ManualBiltyPage() {
     if (resolvedConsignorId)   body.consignor_id     = resolvedConsignorId;
     if (form.consignor_name)   body.consignor_name   = form.consignor_name;
     if (form.consignor_gstin)  body.consignor_gstin  = form.consignor_gstin;
-    if (form.consignor_mobile) body.consignor_mobile = form.consignor_mobile;
+    if (form.consignor_mobile) body.consignor_mobile_numbers = form.consignor_mobile;
     if (resolvedConsigneeId) body.consignee_id     = resolvedConsigneeId;
     if (form.consignee_name)   body.consignee_name   = form.consignee_name;
     if (form.consignee_gstin)  body.consignee_gstin  = form.consignee_gstin;
-    if (form.consignee_mobile) body.consignee_mobile = form.consignee_mobile;
+    if (form.consignee_mobile) body.consignee_mobile_numbers = form.consignee_mobile;
     if (form.transport_id)     body.transport_id     = form.transport_id;
     if (form.transport_name)   body.transport_name   = form.transport_name;
     if (form.from_city_id)     body.from_city_id     = form.from_city_id;
