@@ -201,12 +201,13 @@ export function generateChallanA4LandscapeA(
   const cpMax = LC_W - (cpX - ML) - 2;
 
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...BK);
-  pt(doc, meta.COMPANY_NAME ?? '', cpX, y + 7, 'left', cpMax);
-  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...D40);
-  if (meta.COMPANY_GSTIN)   pt(doc, `GSTIN: ${meta.COMPANY_GSTIN}`,   cpX, y + 11.5, 'left', cpMax);
-  if (meta.COMPANY_MOBILE)  pt(doc, `Ph: ${meta.COMPANY_MOBILE}`,     cpX, y + 15,   'left', cpMax);
-  if (meta.COMPANY_EMAIL)   pt(doc, meta.COMPANY_EMAIL,                cpX, y + 18.5, 'left', cpMax);
-  if (meta.COMPANY_ADDRESS) pt(doc, meta.COMPANY_ADDRESS,              cpX, y + 22,   'left', cpMax);
+  pt(doc, meta.COMPANY_NAME ?? '', cpX, y + 6.5, 'left', cpMax);
+  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(...D40);
+  let detailY = y + 11;
+  if (meta.COMPANY_GSTIN)   { pt(doc, `GSTIN: ${meta.COMPANY_GSTIN}`, cpX, detailY, 'left', cpMax); detailY += 3.5; }
+  if (meta.COMPANY_MOBILE)  { pt(doc, `Ph: ${meta.COMPANY_MOBILE}`,   cpX, detailY, 'left', cpMax); detailY += 3.5; }
+  if (meta.COMPANY_EMAIL)   { pt(doc, meta.COMPANY_EMAIL,              cpX, detailY, 'left', cpMax); detailY += 3.5; }
+  if (meta.COMPANY_ADDRESS) { pt(doc, meta.COMPANY_ADDRESS,            cpX, detailY, 'left', cpMax); }
 
   // — Centre col: CHALLAN title —
   const midX = ML + LC_W + MC_W / 2;
